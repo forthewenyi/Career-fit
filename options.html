@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CareerFit AI Settings</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; width: 500px; }
+        h2 { margin-top: 0; }
+        label { font-weight: bold; display: block; margin-top: 15px; }
+        textarea, input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+        textarea { height: 200px; }
+        button { padding: 10px 15px; margin-top: 20px; cursor: pointer; }
+        #status { margin-top: 15px; color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>CareerFit AI Settings</h2>
+    <label for="apiKey">Gemini API Key:</label>
+    <input type="password" id="apiKey">
+
+    <label for="resume">Your Resume/Accomplishments:</label>
+    <textarea id="resume" placeholder="Paste your full resume text here..."></textarea>
+
+    <button id="saveBtn">Save Settings</button>
+    <div id="status"></div>
+
+    <script src="dist/options.js"></script>
+</body>
+</html>
