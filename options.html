@@ -3,25 +3,177 @@
 <head>
     <title>CareerFit AI Settings</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; width: 500px; }
-        h2 { margin-top: 0; }
-        label { font-weight: bold; display: block; margin-top: 15px; }
-        textarea, input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; width: 550px; }
+        h2 { margin-top: 0; color: #333; }
+        h3 { margin-top: 25px; margin-bottom: 10px; color: #444; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        label { font-weight: 600; display: block; margin-top: 15px; color: #555; }
+        textarea, input[type="text"], input[type="password"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
         textarea { height: 200px; }
-        button { padding: 10px 15px; margin-top: 20px; cursor: pointer; }
-        #status { margin-top: 15px; color: green; font-weight: bold; }
+        textarea:focus, input:focus { outline: none; border-color: #0a66c2; box-shadow: 0 0 0 2px rgba(10,102,194,0.1); }
+        button { padding: 10px 20px; margin-top: 15px; cursor: pointer; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        #saveBtn { background: #0a66c2; color: white; }
+        #saveBtn:hover { background: #0856a3; }
+        #analyzeResumeBtn { background: #4caf50; color: white; margin-left: 10px; }
+        #analyzeResumeBtn:hover { background: #43a047; }
+        #analyzeResumeBtn:disabled { background: #ccc; cursor: not-allowed; }
+        #status { margin-top: 15px; font-weight: bold; }
+        .status-success { color: #4caf50; }
+        .status-error { color: #f44336; }
+        .status-loading { color: #ff9800; }
+
+        /* Profile Display */
+        #profileDisplay {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        #profileDisplay h3 { margin-top: 0; border: none; padding: 0; }
+        #profileDisplay p { margin: 8px 0; line-height: 1.5; }
+        #profileDisplay ul { margin: 5px 0 15px 0; padding-left: 20px; }
+        #profileDisplay li { margin: 4px 0; }
+        #profileDisplay code { background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+        .profile-section { margin-bottom: 15px; }
+        .profile-label { font-weight: 600; color: #333; }
+        .profile-value { color: #666; }
+        .tag { display: inline-block; background: #e3f2fd; color: #1976d2; padding: 3px 8px; border-radius: 12px; font-size: 12px; margin: 2px; }
+        .tag-skill { background: #e8f5e9; color: #388e3c; }
+        .tag-industry { background: #fff3e0; color: #f57c00; }
+
+        /* Hard Filters Section */
+        #filtersSection {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        #filtersSection h3 { margin-top: 0; }
+        .filter-row {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            gap: 8px;
+        }
+        .filter-row label {
+            display: inline;
+            margin: 0;
+            font-weight: normal;
+        }
+        .filter-row input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+        .filter-row input[type="number"] {
+            width: 60px;
+            padding: 5px 8px;
+            margin: 0;
+        }
+        .filter-row input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            margin: 0;
+        }
+        #saveFiltersBtn { background: #ff9800; color: white; }
+        #saveFiltersBtn:hover { background: #f57c00; }
+        .filter-status { font-size: 12px; color: #888; margin-top: 10px; }
     </style>
 </head>
 <body>
     <h2>CareerFit AI Settings</h2>
+
     <label for="apiKey">Gemini API Key:</label>
-    <input type="password" id="apiKey">
+    <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
 
     <label for="resume">Your Resume/Accomplishments:</label>
     <textarea id="resume" placeholder="Paste your full resume text here..."></textarea>
 
-    <button id="saveBtn">Save Settings</button>
+    <div>
+        <button id="saveBtn">Save Settings</button>
+        <button id="analyzeResumeBtn">Analyze My Resume</button>
+    </div>
     <div id="status"></div>
+
+    <!-- Candidate Profile Display -->
+    <div id="profileDisplay">
+        <h3>Your Candidate Profile</h3>
+        <p id="profileAnalyzedAt" style="font-size: 12px; color: #888;"></p>
+
+        <div class="profile-section">
+            <span class="profile-label">Experience:</span>
+            <span class="profile-value"><span id="profileYears"></span> years</span>
+            <span style="margin-left: 10px;" class="profile-label">Level:</span>
+            <span class="profile-value" id="profileLevel"></span>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Education:</span>
+            <span class="profile-value" id="profileEducation"></span>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Functions:</span>
+            <div id="profileFunctions"></div>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Industries:</span>
+            <div id="profileIndustries"></div>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Skills:</span>
+            <div id="profileSkills"></div>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Target Job Titles:</span>
+            <ul id="profileTitles"></ul>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Search Queries (copy these for job boards):</span>
+            <ul id="profileQueries"></ul>
+        </div>
+    </div>
+
+    <!-- Hard Filters Section -->
+    <div id="filtersSection">
+        <h3>Hard Filters</h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Auto-skip jobs that match these criteria during batch scanning:</p>
+
+        <div class="filter-row">
+            <input type="checkbox" id="filterYears" checked>
+            <label for="filterYears">Skip jobs requiring more than</label>
+            <input type="number" id="maxYears" value="10" min="0" max="30">
+            <label>years experience</label>
+        </div>
+
+        <div class="filter-row">
+            <input type="checkbox" id="filterPhD" checked>
+            <label for="filterPhD">Skip jobs requiring PhD</label>
+        </div>
+
+        <div class="filter-row">
+            <input type="checkbox" id="filterDirector" checked>
+            <label for="filterDirector">Skip Director level and above</label>
+        </div>
+
+        <div class="filter-row">
+            <label style="min-width: 180px;">Skip these certifications:</label>
+            <input type="text" id="skipCerts" placeholder="CPA, CFA, PE, PMP (comma separated)">
+        </div>
+
+        <div class="filter-row">
+            <label style="min-width: 180px;">Exclude companies:</label>
+            <input type="text" id="excludeCompanies" placeholder="Company1, Company2 (comma separated)">
+        </div>
+
+        <button id="saveFiltersBtn">Save Filters</button>
+        <div id="filterStatus" class="filter-status"></div>
+    </div>
 
     <script src="dist/options.js"></script>
 </body>

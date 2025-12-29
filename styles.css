@@ -2,7 +2,7 @@
     position: fixed;
     top: 20px;
     right: 20px;
-    width: 380px;
+    width: 340px;
     max-height: 80vh;
     z-index: 9999;
     background: white;
@@ -19,26 +19,51 @@
     overflow-y: auto;
 }
 
-#assess-btn {
+/* Button container */
+#careerfit-buttons {
     position: fixed;
     top: 20px;
     right: 20px;
     z-index: 9998;
+    display: flex;
+    gap: 8px;
+}
+
+#summarize-btn {
     background-color: #0a66c2;
     color: white;
     border: none;
-    padding: 12px 18px;
-    border-radius: 24px;
+    padding: 10px 16px;
+    border-radius: 20px;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(10,102,194,0.3);
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+#summarize-btn:hover {
+    background-color: #0856a3;
+    box-shadow: 0 6px 16px rgba(10,102,194,0.4);
+    transform: translateY(-1px);
+}
+
+#assess-btn {
+    background-color: #666;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    font-size: 13px;
     font-weight: 600;
     transition: all 0.2s ease;
 }
 
 #assess-btn:hover {
-    background-color: #0856a3;
-    box-shadow: 0 6px 16px rgba(10,102,194,0.4);
+    background-color: #555;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.3);
     transform: translateY(-1px);
 }
 
@@ -58,19 +83,48 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Enhanced loading state */
-.loading-dots {
-    display: inline-block;
+/* Scan Jobs Button (Phase 3) */
+#scan-jobs-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(76,175,80,0.3);
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
 }
 
-.loading-dots::after {
-    content: '';
-    animation: loading-dots 1.5s infinite;
+#scan-jobs-btn:hover {
+    background-color: #43a047;
+    box-shadow: 0 6px 16px rgba(76,175,80,0.4);
+    transform: translateY(-1px);
 }
 
-@keyframes loading-dots {
-    0%, 20% { content: '.'; }
-    40% { content: '..'; }
-    60%, 80% { content: '...'; }
-    100% { content: ''; }
+#scan-jobs-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* Modal content scrollbar styling */
+#assess-modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+#assess-modal-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#assess-modal-content::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+#assess-modal-content::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
 }
