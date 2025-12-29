@@ -14,12 +14,12 @@ const SITE_CONFIGS = {
     },
     'student.interstride.com': {
         isSearchPage: (url) => url.includes('/jobs') && !url.match(/\/jobs\/\d+$/),
-        // Generic selectors with fallbacks for Interstride
-        jobCards: '[class*="job-card"], [class*="JobCard"], .job-listing, [class*="job-item"], [class*="JobItem"], .card',
-        title: '[class*="title"], [class*="Title"], h3, h4, h5',
-        company: '[class*="company"], [class*="Company"], [class*="employer"], [class*="Employer"]',
-        location: '[class*="location"], [class*="Location"]',
-        posted: '[class*="date"], [class*="Date"], [class*="posted"], [class*="Posted"], time',
+        // Interstride job listings - may need tuning based on actual search page HTML
+        jobCards: '.employer-job, [class*="job-card"], [class*="JobCard"], .job-listing, [class*="JobListItem"], .card[class*="job"]',
+        title: '.employer-job-details-title-heading, [class*="job-title"], [class*="JobTitle"], h3, h4',
+        company: '.company-card-name-text, [class*="company-name"], [class*="CompanyName"], [class*="employer-name"]',
+        location: '.employer-job-details-middle-left-details-line-data, [class*="location"], [class*="Location"]',
+        posted: '.employer-job-details-footer-posted, [class*="posted"], [class*="date"], time',
         link: 'a[href*="/jobs/"]',
     },
     'linkedin.com': {
@@ -654,3 +654,470 @@ if (onSearchPage) {
         scanBtn.addEventListener('click', handleScanJobs);
     }
 }
+
+// ============================================================
+// PHASE 6: Apply Workflow Features
+// ============================================================
+
+// --- 6.1: Job History Storage ---
+async function saveJobToHistory(job) {
+    const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+
+    // Create a unique ID for the job based on title + company + link
+    const jobId = btoa(`${job.title}|${job.company}|${job.link}`).slice(0, 32);
+
+    // Check if job already exists
+    const existingIndex = jobHistory.findIndex(j => j.id === jobId);
+
+    const jobRecord = {
+        id: jobId,
+        title: job.title,
+        company: job.company,
+        location: job.location || '',
+        link: job.link,
+        score: job.score || null,
+        analysis: job.analysis || null,
+        status: job.status || 'scanned', // scanned, interested, applied, rejected, interview
+        scannedAt: job.scannedAt || new Date().toISOString(),
+        appliedAt: job.appliedAt || null,
+        notes: job.notes || '',
+        source: window.location.hostname
+    };
+
+    if (existingIndex >= 0) {
+        // Update existing job, preserving some fields
+        jobHistory[existingIndex] = {
+            ...jobHistory[existingIndex],
+            ...jobRecord,
+            scannedAt: jobHistory[existingIndex].scannedAt, // Keep original scan date
+        };
+    } else {
+        // Add new job at the beginning
+        jobHistory.unshift(jobRecord);
+    }
+
+    // Limit history to 500 jobs to avoid storage limits
+    if (jobHistory.length > 500) {
+        jobHistory.splice(500);
+    }
+
+    await chrome.storage.local.set({ jobHistory });
+    console.log('CareerFit: Saved job to history:', jobRecord.title);
+    return jobRecord;
+}
+
+async function updateJobStatus(jobId, status, notes = null) {
+    const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+    const jobIndex = jobHistory.findIndex(j => j.id === jobId);
+
+    if (jobIndex >= 0) {
+        jobHistory[jobIndex].status = status;
+        if (status === 'applied') {
+            jobHistory[jobIndex].appliedAt = new Date().toISOString();
+        }
+        if (notes !== null) {
+            jobHistory[jobIndex].notes = notes;
+        }
+        await chrome.storage.local.set({ jobHistory });
+        console.log('CareerFit: Updated job status:', jobHistory[jobIndex].title, '->', status);
+        return jobHistory[jobIndex];
+    }
+    return null;
+}
+
+async function getJobHistory(filter = 'all') {
+    const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+
+    if (filter === 'all') return jobHistory;
+    return jobHistory.filter(j => j.status === filter);
+}
+
+// --- 6.2: Save results after scanning ---
+async function saveAllScanResults() {
+    const results = scanState.results;
+    for (const job of results) {
+        await saveJobToHistory({
+            ...job,
+            status: job.score >= 4 ? 'interested' : 'scanned'
+        });
+    }
+    console.log('CareerFit: Saved', results.length, 'jobs to history');
+}
+
+// --- 6.3: View History Modal ---
+async function showJobHistory() {
+    showLoading('Loading job history...');
+
+    const jobHistory = await getJobHistory();
+
+    if (jobHistory.length === 0) {
+        const modalContent = document.getElementById('assess-modal-content');
+        modalContent.innerHTML = `
+            <h4 style="margin-top: 0;">Job History</h4>
+            <p style="color: #666; text-align: center; padding: 30px;">
+                No jobs in history yet.<br>
+                <small>Scan some jobs to start building your history!</small>
+            </p>
+        `;
+        return;
+    }
+
+    // Group by status
+    const applied = jobHistory.filter(j => j.status === 'applied');
+    const interested = jobHistory.filter(j => j.status === 'interested');
+    const interviewed = jobHistory.filter(j => j.status === 'interview');
+    const scanned = jobHistory.filter(j => j.status === 'scanned');
+
+    const modalContent = document.getElementById('assess-modal-content');
+    modalContent.innerHTML = `
+        <h4 style="margin-top: 0;">Job History (${jobHistory.length} jobs)</h4>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #e3f2fd; border-radius: 6px;">
+                <div style="font-size: 18px; font-weight: bold; color: #1976d2;">${applied.length}</div>
+                <div style="font-size: 10px; color: #666;">Applied</div>
+            </div>
+            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #f3e5f5; border-radius: 6px;">
+                <div style="font-size: 18px; font-weight: bold; color: #7b1fa2;">${interviewed.length}</div>
+                <div style="font-size: 10px; color: #666;">Interview</div>
+            </div>
+            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #e8f5e9; border-radius: 6px;">
+                <div style="font-size: 18px; font-weight: bold; color: #4caf50;">${interested.length}</div>
+                <div style="font-size: 10px; color: #666;">Interested</div>
+            </div>
+            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #f5f5f5; border-radius: 6px;">
+                <div style="font-size: 18px; font-weight: bold; color: #666;">${scanned.length}</div>
+                <div style="font-size: 10px; color: #666;">Scanned</div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button class="history-filter-btn active" data-filter="all" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: #0a66c2; color: white; cursor: pointer; font-size: 12px;">All</button>
+            <button class="history-filter-btn" data-filter="applied" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">Applied</button>
+            <button class="history-filter-btn" data-filter="interested" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">Interested</button>
+        </div>
+
+        <div id="history-list" style="max-height: 350px; overflow-y: auto;">
+            ${renderHistoryList(jobHistory)}
+        </div>
+
+        <div style="margin-top: 12px; text-align: center;">
+            <button id="clear-history-btn" style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Clear All History</button>
+        </div>
+    `;
+
+    // Add filter button handlers
+    modalContent.querySelectorAll('.history-filter-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const filter = e.target.dataset.filter;
+            const filtered = filter === 'all' ? jobHistory : jobHistory.filter(j => j.status === filter);
+            document.getElementById('history-list').innerHTML = renderHistoryList(filtered);
+
+            // Update active state
+            modalContent.querySelectorAll('.history-filter-btn').forEach(b => {
+                b.style.background = 'white';
+                b.style.color = '#333';
+            });
+            e.target.style.background = '#0a66c2';
+            e.target.style.color = 'white';
+
+            // Re-attach event listeners for the new list
+            attachHistoryListeners();
+        });
+    });
+
+    // Add clear history handler
+    document.getElementById('clear-history-btn').addEventListener('click', async () => {
+        if (confirm('Are you sure you want to clear all job history? This cannot be undone.')) {
+            await chrome.storage.local.set({ jobHistory: [] });
+            showJobHistory(); // Refresh
+        }
+    });
+
+    // Attach listeners for job actions
+    attachHistoryListeners();
+}
+
+function renderHistoryList(jobs) {
+    if (jobs.length === 0) {
+        return '<p style="color: #888; text-align: center; padding: 20px;">No jobs match this filter.</p>';
+    }
+
+    return jobs.map(job => {
+        const statusColors = {
+            applied: '#1976d2',
+            interview: '#7b1fa2',
+            interested: '#4caf50',
+            scanned: '#999',
+            rejected: '#f44336'
+        };
+        const statusColor = statusColors[job.status] || '#999';
+        const scoreDisplay = job.score ? `<span style="background: ${getScoreColor(job.score)}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">${job.score}/5</span>` : '';
+        const dateDisplay = job.appliedAt ?
+            `Applied ${new Date(job.appliedAt).toLocaleDateString()}` :
+            `Scanned ${new Date(job.scannedAt).toLocaleDateString()}`;
+
+        return `
+            <div class="history-job-item" data-job-id="${job.id}" style="padding: 10px; margin: 6px 0; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${statusColor};">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div style="flex: 1;">
+                        <strong style="font-size: 13px;">${job.title}</strong> ${scoreDisplay}<br>
+                        <span style="color: #666; font-size: 12px;">${job.company}</span><br>
+                        <span style="color: #999; font-size: 10px;">${dateDisplay}</span>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
+                    <select class="job-status-select" data-job-id="${job.id}" style="padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: white;">
+                        <option value="scanned" ${job.status === 'scanned' ? 'selected' : ''}>Scanned</option>
+                        <option value="interested" ${job.status === 'interested' ? 'selected' : ''}>Interested</option>
+                        <option value="applied" ${job.status === 'applied' ? 'selected' : ''}>Applied</option>
+                        <option value="interview" ${job.status === 'interview' ? 'selected' : ''}>Interview</option>
+                        <option value="rejected" ${job.status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                    </select>
+                    <a href="${job.link}" target="_blank" style="padding: 4px 8px; background: #0a66c2; color: white; border-radius: 4px; font-size: 11px; text-decoration: none;">View</a>
+                    <button class="match-bullets-btn" data-job-id="${job.id}" style="padding: 4px 8px; background: #ff9800; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">Match Resume</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function attachHistoryListeners() {
+    // Status change handlers
+    document.querySelectorAll('.job-status-select').forEach(select => {
+        select.addEventListener('change', async (e) => {
+            const jobId = e.target.dataset.jobId;
+            const newStatus = e.target.value;
+            await updateJobStatus(jobId, newStatus);
+
+            // Visual feedback
+            const item = e.target.closest('.history-job-item');
+            const statusColors = {
+                applied: '#1976d2',
+                interview: '#7b1fa2',
+                interested: '#4caf50',
+                scanned: '#999',
+                rejected: '#f44336'
+            };
+            item.style.borderLeftColor = statusColors[newStatus] || '#999';
+        });
+    });
+
+    // Match bullets handlers
+    document.querySelectorAll('.match-bullets-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const jobId = e.target.dataset.jobId;
+            const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+            const job = jobHistory.find(j => j.id === jobId);
+            if (job) {
+                showBulletMatching(job);
+            }
+        });
+    });
+}
+
+// --- 6.4: Resume Bullet Matching ---
+async function showBulletMatching(job) {
+    showLoading('Analyzing which resume bullets match this job...');
+
+    try {
+        const response = await chrome.runtime.sendMessage({
+            type: 'matchBullets',
+            job: {
+                title: job.title,
+                company: job.company,
+                link: job.link
+            }
+        });
+
+        if (response && response.success) {
+            displayBulletMatches(job, response.data);
+        } else {
+            showError(response?.error || 'Failed to analyze bullet matches');
+        }
+    } catch (error) {
+        console.error('CareerFit: Error matching bullets:', error);
+        showError('Failed to analyze bullet matches: ' + error.message);
+    }
+}
+
+function displayBulletMatches(job, matchData) {
+    const modalContent = document.getElementById('assess-modal-content');
+
+    const strongMatches = matchData.matches?.filter(m => m.strength === 'strong') || [];
+    const moderateMatches = matchData.matches?.filter(m => m.strength === 'moderate') || [];
+    const suggestions = matchData.suggestions || [];
+
+    modalContent.innerHTML = `
+        <h4 style="margin-top: 0;">Resume Match: ${job.title}</h4>
+        <p style="color: #666; font-size: 12px; margin-bottom: 15px;">${job.company}</p>
+
+        ${strongMatches.length > 0 ? `
+            <h5 style="color: #4caf50; margin: 10px 0 8px 0; font-size: 13px;">Strong Matches (${strongMatches.length})</h5>
+            <ul style="margin: 0 0 15px 0; padding-left: 18px; font-size: 12px;">
+                ${strongMatches.map(m => `
+                    <li style="margin: 6px 0; color: #333;">
+                        "${m.bullet}"
+                        <br><span style="color: #4caf50; font-size: 11px;">→ ${m.reason}</span>
+                    </li>
+                `).join('')}
+            </ul>
+        ` : ''}
+
+        ${moderateMatches.length > 0 ? `
+            <h5 style="color: #ff9800; margin: 10px 0 8px 0; font-size: 13px;">Moderate Matches (${moderateMatches.length})</h5>
+            <ul style="margin: 0 0 15px 0; padding-left: 18px; font-size: 12px;">
+                ${moderateMatches.map(m => `
+                    <li style="margin: 6px 0; color: #333;">
+                        "${m.bullet}"
+                        <br><span style="color: #ff9800; font-size: 11px;">→ ${m.reason}</span>
+                    </li>
+                `).join('')}
+            </ul>
+        ` : ''}
+
+        ${strongMatches.length === 0 && moderateMatches.length === 0 ? `
+            <p style="color: #f44336; font-style: italic;">No strong matches found between your resume and this job.</p>
+        ` : ''}
+
+        ${suggestions.length > 0 ? `
+            <h5 style="color: #0a66c2; margin: 15px 0 8px 0; font-size: 13px;">Suggestions to Strengthen Application</h5>
+            <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #666;">
+                ${suggestions.map(s => `<li style="margin: 4px 0;">${s}</li>`).join('')}
+            </ul>
+        ` : ''}
+
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button id="back-to-history" style="flex: 1; padding: 10px; background: #666; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">← Back to History</button>
+            <a href="${job.link}" target="_blank" style="flex: 1; padding: 10px; background: #0a66c2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; text-decoration: none; text-align: center;">View Job</a>
+        </div>
+    `;
+
+    document.getElementById('back-to-history').addEventListener('click', () => {
+        showJobHistory();
+    });
+}
+
+// --- Add History Button to UI ---
+function addHistoryButton() {
+    const historyBtn = document.createElement('button');
+    historyBtn.id = 'history-btn';
+    historyBtn.textContent = 'History';
+    historyBtn.style.cssText = `
+        background-color: #666;
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    `;
+    historyBtn.addEventListener('mouseenter', () => {
+        historyBtn.style.backgroundColor = '#555';
+    });
+    historyBtn.addEventListener('mouseleave', () => {
+        historyBtn.style.backgroundColor = '#666';
+    });
+    historyBtn.addEventListener('click', () => {
+        modal.style.display = 'block';
+        showJobHistory();
+    });
+
+    buttonContainer.appendChild(historyBtn);
+}
+
+// Initialize history button
+addHistoryButton();
+
+// --- Modify displayFinalResults to save history ---
+const originalDisplayFinalResults = displayFinalResults;
+displayFinalResults = async function() {
+    // Save all results to history first
+    await saveAllScanResults();
+
+    // Call original function to display results
+    const results = scanState.results;
+    const highFit = results.filter(r => r.score >= 4).sort((a, b) => b.score - a.score);
+    const mediumFit = results.filter(r => r.score >= 3 && r.score < 4);
+    const lowFit = results.filter(r => r.score < 3 && r.score > 0);
+    const errors = results.filter(r => r.score === 0);
+
+    const modalContent = document.getElementById('assess-modal-content');
+
+    modalContent.innerHTML = `
+        <h4 style="margin-top: 0;">Scan Complete! <span style="font-size: 12px; color: #4caf50;">(Saved to History)</span></h4>
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <div style="flex: 1; text-align: center; padding: 12px; background: #e8f5e9; border-radius: 8px;">
+                <div style="font-size: 20px; font-weight: bold; color: #4caf50;">${highFit.length}</div>
+                <div style="font-size: 11px; color: #666;">Great Fit (4+)</div>
+            </div>
+            <div style="flex: 1; text-align: center; padding: 12px; background: #fff3e0; border-radius: 8px;">
+                <div style="font-size: 20px; font-weight: bold; color: #ff9800;">${mediumFit.length}</div>
+                <div style="font-size: 11px; color: #666;">Good Fit (3)</div>
+            </div>
+            <div style="flex: 1; text-align: center; padding: 12px; background: #ffebee; border-radius: 8px;">
+                <div style="font-size: 20px; font-weight: bold; color: #f44336;">${lowFit.length}</div>
+                <div style="font-size: 11px; color: #666;">Low Fit (1-2)</div>
+            </div>
+        </div>
+
+        ${highFit.length > 0 ? `
+            <h5 style="color: #4caf50; margin: 15px 0 10px 0;">Recommended Jobs</h5>
+            <div style="max-height: 250px; overflow-y: auto;">
+                ${highFit.map(job => `
+                    <div style="padding: 12px; margin: 8px 0; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${getScoreColor(job.score)};">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <strong style="font-size: 14px;">${job.title}</strong><br>
+                                <span style="color: #666; font-size: 13px;">${job.company}</span>
+                            </div>
+                            <div style="background: ${getScoreColor(job.score)}; color: white; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 13px;">
+                                ${job.score}/5
+                            </div>
+                        </div>
+                        ${job.analysis?.recommendation ? `<div style="font-size: 12px; color: #4caf50; margin-top: 6px;">${job.analysis.recommendation}</div>` : ''}
+                        ${job.analysis?.strengths?.length ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">✓ ${job.analysis.strengths[0]}</div>` : ''}
+                        <a href="${job.link}" target="_blank" style="display: inline-block; margin-top: 8px; font-size: 12px; color: #0a66c2; text-decoration: none;">View Job →</a>
+                    </div>
+                `).join('')}
+            </div>
+        ` : '<p style="color: #666; text-align: center; padding: 20px;">No jobs scored 4 or above. Try expanding your filters.</p>'}
+
+        ${mediumFit.length > 0 ? `
+            <details style="margin-top: 15px;">
+                <summary style="cursor: pointer; color: #ff9800; font-size: 13px; font-weight: 600;">Good Fit Jobs (${mediumFit.length})</summary>
+                <div style="margin-top: 8px;">
+                    ${mediumFit.map(job => `
+                        <div style="padding: 8px; margin: 4px 0; background: #fff8e1; border-radius: 6px; font-size: 13px;">
+                            <strong>${job.title}</strong> - ${job.company}
+                            <span style="float: right; color: #ff9800;">${job.score}/5</span>
+                            <br><a href="${job.link}" target="_blank" style="font-size: 11px; color: #0a66c2;">View →</a>
+                        </div>
+                    `).join('')}
+                </div>
+            </details>
+        ` : ''}
+
+        ${errors.length > 0 ? `
+            <details style="margin-top: 10px;">
+                <summary style="cursor: pointer; color: #999; font-size: 12px;">${errors.length} jobs couldn't be scored</summary>
+                <ul style="font-size: 11px; color: #999;">
+                    ${errors.map(j => `<li>${j.title} - ${j.error || 'Error'}</li>`).join('')}
+                </ul>
+            </details>
+        ` : ''}
+
+        <div style="margin-top: 15px; text-align: center;">
+            <button id="view-history-after-scan" style="padding: 10px 20px; background: #0a66c2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">View Full History</button>
+        </div>
+    `;
+    modal.style.display = 'block';
+
+    // Add handler for view history button
+    document.getElementById('view-history-after-scan')?.addEventListener('click', showJobHistory);
+};
+
+console.log('CareerFit: Phase 6 - Apply Workflow Features loaded');

@@ -9,14 +9,21 @@
 | Phase 3: Batch Job Scanner | ✅ DONE |
 | Phase 4: Quick Filter | ✅ DONE |
 | Phase 5: Full AI Scoring | ✅ DONE |
-| Phase 6: Apply Workflow | ⏳ DEFERRED |
+| Phase 6: Apply Workflow | ✅ DONE |
 
-**Core functionality complete!** The extension can now:
+### Recent Updates (Dec 29, 2024)
+- **Search Queries**: Added copy buttons next to each search query for easy copying to job boards
+- **Target Titles**: Now generates 8-12 titles including both current level AND entry-level/junior roles
+- **Interstride Selectors**: Updated with more specific selectors for job detail pages
+
+**All phases complete!** The extension can now:
 1. Analyze resumes and extract structured candidate profiles
 2. Configure hard filters (Director+, PhD, companies, etc.)
 3. Scan job search pages (LinkedIn, Indeed, Interstride, Greenhouse, Lever)
 4. Quick filter jobs without API calls
 5. Score remaining jobs with Gemini AI and display ranked results
+6. Track job history with status updates (Applied, Interview, etc.)
+7. Match resume bullets to specific jobs with AI analysis
 
 ---
 
@@ -684,17 +691,30 @@ function displayScanResults(results) {
 
 ---
 
-## Phase 6: Apply Workflow (Future)
+## Phase 6: Apply Workflow
 
 **Goal:** Help with actual applications
 
-**Features (defer to later):**
-- "Which of my bullets match this job?" - highlight relevant experience
-- "Suggested resume tweaks" - optional
-- "Mark as applied" - track status
-- "View history" - see all scanned/applied jobs
+**STATUS: IMPLEMENTED**
 
-**This phase can wait** - Phases 1-5 deliver the core value.
+### Features Implemented:
+- [x] Job history storage (saves all scanned jobs to chrome.storage.local)
+- [x] Status tracking (scanned → interested → applied → interview → rejected)
+- [x] "History" button in UI to view all past jobs
+- [x] Filter history by status (All, Applied, Interested)
+- [x] "Match Resume" button for each job - AI analyzes which resume bullets match
+- [x] Resume bullet matching with strength ratings (strong/moderate)
+- [x] Application suggestions from AI
+- [x] "Clear History" option
+- [x] Auto-save results after scanning (high-fit jobs marked as "interested")
+
+### Phase 6 Acceptance Criteria
+- [x] Jobs saved to history after scanning
+- [x] Status can be changed via dropdown
+- [x] History persists across sessions
+- [x] Resume bullet matching works via background.js
+- [x] Strong/moderate match categorization
+- [x] Suggestions for strengthening application
 
 ---
 
@@ -766,25 +786,150 @@ export default {
 | 3 | Phase 3: Job scanner | 2-3 hrs | **DONE** | None |
 | 4 | Phase 4: Quick filter | 1 hr | **DONE** | Phase 3 |
 | 5 | Phase 5: Full scoring | 2-3 hrs | **DONE** | Phase 4 |
-| 6 | Phase 6: Apply workflow | 3+ hrs | **DEFERRED** | Phase 5 |
+| 6 | Phase 6: Apply workflow | 3+ hrs | **DONE** | Phase 5 |
 
-**Phases 1-5 completed.** Phase 6 deferred for future implementation.
+**All phases completed!** CareerFit v2 is feature-complete.
 
 ---
 
-## Next Steps
+## Future Improvements
 
-### To improve Interstride support:
+### Search Queries Feature
+
+**Current Implementation:**
+The "Search Queries" section in the Options page displays AI-generated Boolean search strings based on the user's resume. These are optimized queries for job boards like:
+- `"Technical Program Manager" AND (Agile OR SAFe) AND automotive`
+- `"Product Manager" AND SQL AND "cross-functional"`
+
+**Current Workflow:**
+1. User analyzes their resume in Options page
+2. Gemini generates 3-5 optimized search queries
+3. Each query has a "Copy" button
+4. User manually goes to job board → pastes query into search box
+
+**Why It's in Options (not content script):**
+- Search queries are generated once during resume analysis
+- They're meant for use across multiple job sites
+- Options page is where users configure their profile
+
+**Potential Future Improvements:**
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| Keep as-is | Manual copy workflow | Simple, works anywhere | Extra steps for user |
+| Auto-fill search | Inject queries into job board search boxes | Seamless UX | Site-specific, may break |
+| Toolbar popup | Show queries in extension popup | Quick access | Adds UI complexity |
+| Remove feature | Rely on target titles instead | Cleaner UI | Loses search optimization |
+
+### Interstride support:
+If Interstride job extraction isn't working:
 1. Go to https://student.interstride.com/jobs
 2. Right-click a job card → Inspect
 3. Share the HTML structure or class names
-4. Update SITE_CONFIGS with more specific selectors if needed
+4. Update SITE_CONFIGS with more specific selectors
 
-### Phase 6 (Future):
-1. "Which of my bullets match this job?" - highlight relevant experience
-2. "Suggested resume tweaks" - optional
-3. "Mark as applied" - track status
-4. "View history" - see all scanned/applied jobs
+---
+
+## Phase 7: Resume Tailor (Future)
+
+**Goal:** Instead of just matching resume bullets to jobs, tell user what to UPDATE on their resume - missing keywords, bullet points to add/rewrite, skills gaps to address.
+
+### Current "Match Resume" Behavior:
+- Shows which existing resume bullets match the job
+- Rates match strength (strong/moderate)
+- Provides general suggestions
+
+### Proposed New Behavior:
+```
+User clicks "Tailor Resume" for a job
+        ↓
+AI analyzes job requirements vs resume
+        ↓
+Returns actionable feedback:
+  - Keywords missing from resume (add these!)
+  - Bullet points to rewrite with specific suggestions
+  - Skills to highlight or add
+  - Accomplishments to quantify
+        ↓
+Display with "Copy" buttons for each suggestion
+```
+
+### Schema Design:
+```javascript
+resumeTailorSchema = {
+  missingKeywords: ["Kubernetes", "CI/CD", "stakeholder management"],
+  bulletsToAdd: [
+    {
+      suggestion: "Add a bullet about cross-functional leadership",
+      example: "Led cross-functional team of 8 engineers and designers..."
+    }
+  ],
+  bulletsToRewrite: [
+    {
+      original: "Managed projects",
+      improved: "Managed 5 concurrent product launches, delivering $2M ARR",
+      reason: "Quantify impact and be specific"
+    }
+  ],
+  skillsToHighlight: ["SQL", "A/B testing"],
+  overallFit: "Good fit with minor resume adjustments needed"
+}
+```
+
+**Status:** NOT STARTED - Replaces/enhances current "Match Resume" feature.
+
+---
+
+## Phase 8: Interview Prep (Future)
+
+**Goal:** When user marks a job as "Applied", generate study content to prepare for interviews.
+
+### Proposed Flow:
+```
+User changes job status → "Applied"
+        ↓
+Trigger AI call to generate prep content:
+  - Topics to study based on job requirements
+  - Skills gaps to address
+  - Company-specific research areas
+  - Common interview questions for role
+        ↓
+Store in jobHistory alongside job record
+        ↓
+Display with "View Prep" button + "Copy" option
+```
+
+### Storage Design:
+```javascript
+jobRecord = {
+  // ... existing fields ...
+  prepContent: {
+    topics: ["SQL queries", "A/B testing", "Product metrics"],
+    skillGaps: ["Need to brush up on Python", "Review ML basics"],
+    companyResearch: ["Check recent product launches", "Review earnings calls"],
+    questions: ["Tell me about a time you...", "How would you prioritize..."],
+    generatedAt: "2024-12-29T..."
+  }
+}
+```
+
+### Storage Budget:
+| Data | Size Est. | Notes |
+|------|-----------|-------|
+| chrome.storage.local limit | 5 MB | Total available |
+| Current usage (500 jobs) | ~1 MB | Without prep content |
+| Prep content per job | ~3-5 KB | Topics, questions, etc. |
+| With prep (100 applied jobs) | ~1.5 MB | Conservative estimate |
+| **Remaining headroom** | ~2.5 MB | Plenty of space |
+
+### Export Options:
+| Option | Complexity | Description |
+|--------|------------|-------------|
+| Copy to clipboard | Simple | One-click copy formatted prep content |
+| Download as .md | Simple | Export prep as markdown file |
+| Open in new tab | Simple | Display prep in dedicated page |
+| Google Drive (OAuth) | Complex | Requires API setup, but possible |
+
+**Status:** NOT STARTED - Pending user decision on implementation approach.
 
 ---
 

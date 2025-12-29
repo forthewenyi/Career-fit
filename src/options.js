@@ -144,9 +144,33 @@ function displayProfile(profile) {
     document.getElementById('profileTitles').innerHTML =
         (profile.targetTitles || []).map(t => `<li>${t}</li>`).join('');
 
-    // Search Queries
+    // Search Queries with copy buttons
     document.getElementById('profileQueries').innerHTML =
-        (profile.searchQueries || []).map(q => `<li><code>${q}</code></li>`).join('');
+        (profile.searchQueries || []).map((q, i) => `
+            <li style="display: flex; align-items: center; gap: 8px; margin: 6px 0;">
+                <code style="flex: 1; word-break: break-word;">${q}</code>
+                <button class="copy-query-btn" data-query="${encodeURIComponent(q)}" style="padding: 4px 8px; font-size: 11px; background: #0a66c2; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">Copy</button>
+            </li>
+        `).join('');
+
+    // Add copy button handlers
+    document.querySelectorAll('.copy-query-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const query = decodeURIComponent(e.target.dataset.query);
+            try {
+                await navigator.clipboard.writeText(query);
+                e.target.textContent = 'Copied!';
+                e.target.style.background = '#4caf50';
+                setTimeout(() => {
+                    e.target.textContent = 'Copy';
+                    e.target.style.background = '#0a66c2';
+                }, 1500);
+            } catch (err) {
+                e.target.textContent = 'Failed';
+                setTimeout(() => { e.target.textContent = 'Copy'; }, 1500);
+            }
+        });
+    });
 }
 
 // --- Hard Filters ---

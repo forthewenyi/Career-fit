@@ -30,6 +30,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; // Keep channel open for async response
     }
 
+    // Handle matchBullets - Phase 6 resume bullet matching
+    if (message.type === 'matchBullets') {
+        handleMatchBullets(message.job, sendResponse);
+        return true; // Keep channel open for async response
+    }
+
     if (message.type === 'summarizeRole') {
         // Get API Key from storage (no resume needed for summary)
         chrome.storage.sync.get(['geminiApiKey'], (data) => {
@@ -285,7 +291,7 @@ Extract the following structured data:
 6. hardSkills: Technical skills - tools, languages, methodologies (e.g., ["SQL", "Python", "Agile"])
 7. softSkills: Leadership, communication skills (e.g., ["Cross-functional leadership", "Stakeholder management"])
 8. certifications: Any certifications (e.g., ["PMP", "Six Sigma Green Belt"])
-9. targetTitles: 5-10 job titles they should search for based on their experience
+9. targetTitles: 8-12 job titles they should search for - INCLUDE BOTH their current level AND entry-level/junior roles they qualify for (e.g., if they're a Senior PM, also include "Product Manager", "Associate Product Manager")
 10. searchQueries: 3-5 Boolean search strings for job boards (e.g., "product manager AND operations")
 11. keywords: 10-15 keywords that should appear in matching job descriptions
 12. hardFilters: Disqualifiers
@@ -402,6 +408,85 @@ Based ONLY on title/company matching to candidate's target titles and experience
         result = JSON.parse(response.text);
     } catch (parseError) {
         console.error('CareerFit: Failed to parse score response:', parseError);
+        throw new Error('Invalid response format from AI service');
+    }
+
+    return result;
+}
+
+// --- Phase 6: Resume Bullet Matching ---
+async function handleMatchBullets(job, sendResponse) {
+    try {
+        const syncData = await chrome.storage.sync.get(['geminiApiKey', 'userResume']);
+
+        if (!syncData.geminiApiKey) {
+            sendResponse({ success: false, error: 'API Key not found.' });
+            return;
+        }
+
+        if (!syncData.userResume) {
+            sendResponse({ success: false, error: 'Resume not found. Please save your resume in the extension options.' });
+            return;
+        }
+
+        const result = await matchResumeBullets(job, syncData.userResume, syncData.geminiApiKey);
+        sendResponse({ success: true, data: result });
+    } catch (error) {
+        console.error('CareerFit: Error matching bullets:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function matchResumeBullets(job, resumeText, apiKey) {
+    const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
+
+    // Define schema for bullet matching
+    const bulletMatchSchema = z.object({
+        matches: z.array(z.object({
+            bullet: z.string().describe('The resume bullet point that matches'),
+            strength: z.enum(['strong', 'moderate']).describe('How strong the match is'),
+            reason: z.string().describe('Why this bullet matches the job (1 sentence)')
+        })).describe('Resume bullets that match the job'),
+        suggestions: z.array(z.string()).describe('2-3 suggestions to strengthen the application')
+    });
+
+    const schemaJson = zodToJsonSchema(bulletMatchSchema);
+    schemaJson['propertyOrdering'] = ['matches', 'suggestions'];
+
+    const prompt = `Analyze which parts of this resume best match this job posting.
+
+JOB:
+- Title: ${job.title}
+- Company: ${job.company}
+
+RESUME:
+${resumeText}
+
+For each relevant resume bullet point or accomplishment:
+1. Identify bullets that demonstrate skills/experience relevant to "${job.title}" at "${job.company}"
+2. Rate match strength: "strong" (directly relevant) or "moderate" (transferable)
+3. Explain WHY it matches in 1 short sentence
+
+Also provide 2-3 specific suggestions on how to strengthen the application for this role.
+
+Be selective - only include bullets that genuinely match. Quality over quantity.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            responseMimeType: 'application/json',
+            responseJsonSchema: schemaJson,
+        },
+    });
+
+    console.log('CareerFit: Match bullets response:', response.text);
+
+    let result;
+    try {
+        result = JSON.parse(response.text);
+    } catch (parseError) {
+        console.error('CareerFit: Failed to parse bullet match response:', parseError);
         throw new Error('Invalid response format from AI service');
     }
 
