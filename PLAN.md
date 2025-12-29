@@ -1,5 +1,25 @@
 # CareerFit v2: Job Scanner Implementation Plan
 
+## Current Status (Updated Dec 29, 2024)
+
+| Phase | Status |
+|-------|--------|
+| Phase 1: Resume Profile Extraction | ✅ DONE |
+| Phase 2: Hard Filter Configuration | ✅ DONE |
+| Phase 3: Batch Job Scanner | ✅ DONE |
+| Phase 4: Quick Filter | ✅ DONE |
+| Phase 5: Full AI Scoring | ✅ DONE |
+| Phase 6: Apply Workflow | ⏳ DEFERRED |
+
+**Core functionality complete!** The extension can now:
+1. Analyze resumes and extract structured candidate profiles
+2. Configure hard filters (Director+, PhD, companies, etc.)
+3. Scan job search pages (LinkedIn, Indeed, Interstride, Greenhouse, Lever)
+4. Quick filter jobs without API calls
+5. Score remaining jobs with Gemini AI and display ranked results
+
+---
+
 ## Overview
 
 Transform CareerFit from a single-job analyzer into a batch job scanner that finds roles matching your profile.
@@ -260,12 +280,13 @@ chrome.storage.local.get(['candidateProfile'], (data) => {
 ```
 
 ### Phase 1 Acceptance Criteria
-- [ ] "Analyze Resume" button in options page
-- [ ] Clicking sends resume to Gemini via background.js
-- [ ] Response comes back via sendResponse (not onMessage)
-- [ ] Structured profile saved to chrome.storage.local
-- [ ] Profile displayed with target titles and search queries
-- [ ] Profile persists and loads on page refresh
+- [x] "Analyze Resume" button in options page
+- [x] Clicking sends resume to Gemini via background.js
+- [x] Response comes back via sendResponse (not onMessage)
+- [x] Structured profile saved to chrome.storage.local
+- [x] Profile displayed with target titles and search queries
+- [x] Profile persists and loads on page refresh
+- [x] Education extraction added (highestDegree, field, schools)
 
 ---
 
@@ -341,10 +362,10 @@ chrome.storage.local.get(['hardFilters'], (data) => {
 ```
 
 ### Phase 2 Acceptance Criteria
-- [ ] Filter UI displays in options page
-- [ ] Filters save to chrome.storage.local
-- [ ] Filters load on page refresh
-- [ ] Values accessible from content.js for quick filtering
+- [x] Filter UI displays in options page
+- [x] Filters save to chrome.storage.local
+- [x] Filters load on page refresh
+- [x] Values accessible from content.js for quick filtering
 
 ---
 
@@ -352,7 +373,7 @@ chrome.storage.local.get(['hardFilters'], (data) => {
 
 **Goal:** Extract job listings from search results pages
 
-**STATUS: BLOCKED** - Need DOM inspection of Interstride job search page to get correct selectors.
+**STATUS: IMPLEMENTED** - Site configs added for LinkedIn, Indeed, Interstride (generic selectors), Greenhouse, and Lever.
 
 ### Site Configuration (content.js)
 
@@ -516,11 +537,12 @@ function sleep(ms) {
 ```
 
 ### Phase 3 Acceptance Criteria
-- [ ] "Scan Jobs" button appears only on search results pages
-- [ ] extractJobListings() works on Indeed
-- [ ] extractJobListings() works on Interstride (after DOM inspection)
-- [ ] Jobs are highlighted on page (green = match, faded = skipped)
-- [ ] Summary shows in modal
+- [x] "Scan Jobs" button appears only on search results pages
+- [x] extractJobListings() works on Indeed
+- [x] extractJobListings() uses generic selectors for Interstride (may need tuning)
+- [x] Jobs are highlighted on page (green = match, faded = skipped)
+- [x] Summary shows in modal
+- [x] Site configs added for LinkedIn, Greenhouse, Lever
 
 ---
 
@@ -563,11 +585,12 @@ function quickFilter(job, candidateProfile, hardFilters) {
 ```
 
 ### Phase 4 Acceptance Criteria
-- [ ] Quick filter runs without API call
-- [ ] Filters out excluded companies
-- [ ] Filters out too-senior titles
-- [ ] Filters out non-matching titles
-- [ ] Returns reason for each decision
+- [x] Quick filter runs without API call
+- [x] Filters out excluded companies
+- [x] Filters out too-senior titles (Director, VP, Chief, etc.)
+- [x] Filters out non-matching titles
+- [x] Returns reason for each decision
+- [x] Filters out PhD requirements in title
 
 ---
 
@@ -650,11 +673,14 @@ function displayScanResults(results) {
 ```
 
 ### Phase 5 Acceptance Criteria
-- [ ] Full scoring uses candidateProfile for comparison
-- [ ] Results ranked by score
-- [ ] High-fit jobs (4+) prominently displayed
-- [ ] Each result shows score, title, company, recommendation
-- [ ] "View Job" link works
+- [x] Full scoring uses candidateProfile for comparison
+- [x] Results ranked by score
+- [x] High-fit jobs (4+) prominently displayed
+- [x] Each result shows score, title, company, recommendation
+- [x] "View Job" link works
+- [x] Progress bar during scoring
+- [x] Anti-bot delays (4-12s between jobs)
+- [x] Max 20 jobs per scan limit
 
 ---
 
@@ -735,28 +761,30 @@ export default {
 
 | Order | Phase | Effort | Status | Dependencies |
 |-------|-------|--------|--------|--------------|
-| 1 | Phase 1: Profile extraction | 2-3 hrs | Ready | None |
-| 2 | Phase 2: Hard filters UI | 1-2 hrs | Ready | Phase 1 |
-| 3 | Phase 3: Job scanner | 2-3 hrs | **BLOCKED** | Need Interstride DOM |
-| 4 | Phase 4: Quick filter | 1 hr | Ready | Phase 3 |
-| 5 | Phase 5: Full scoring | 2-3 hrs | Ready | Phase 4 |
-| 6 | Phase 6: Apply workflow | 3+ hrs | Deferred | Phase 5 |
+| 1 | Phase 1: Profile extraction | 2-3 hrs | **DONE** | None |
+| 2 | Phase 2: Hard filters UI | 1-2 hrs | **DONE** | Phase 1 |
+| 3 | Phase 3: Job scanner | 2-3 hrs | **DONE** | None |
+| 4 | Phase 4: Quick filter | 1 hr | **DONE** | Phase 3 |
+| 5 | Phase 5: Full scoring | 2-3 hrs | **DONE** | Phase 4 |
+| 6 | Phase 6: Apply workflow | 3+ hrs | **DEFERRED** | Phase 5 |
 
-**Total estimate:** 12-15 hours (excluding Phase 6)
+**Phases 1-5 completed.** Phase 6 deferred for future implementation.
 
 ---
 
-## Blockers & Next Steps
+## Next Steps
 
-### Before Phase 3 can start:
-1. **Inspect Interstride DOM** - Need actual selectors for job cards
-2. **Test Indeed selectors** - Verify they still work
-
-### To unblock:
+### To improve Interstride support:
 1. Go to https://student.interstride.com/jobs
 2. Right-click a job card → Inspect
 3. Share the HTML structure or class names
-4. I'll update SITE_CONFIGS with correct selectors
+4. Update SITE_CONFIGS with more specific selectors if needed
+
+### Phase 6 (Future):
+1. "Which of my bullets match this job?" - highlight relevant experience
+2. "Suggested resume tweaks" - optional
+3. "Mark as applied" - track status
+4. "View history" - see all scanned/applied jobs
 
 ---
 
