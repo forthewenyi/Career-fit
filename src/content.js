@@ -128,11 +128,60 @@ const onSearchPage = isOnSearchResultsPage();
 console.log('CareerFit: On search results page:', onSearchPage);
 
 buttonContainer.innerHTML = `
-    ${onSearchPage ? '<button id="scan-jobs-btn">Scan Jobs</button>' : ''}
-    <button id="summarize-btn">Summarize Role</button>
-    <button id="assess-btn">Compare to Resume</button>
+    <span id="cf-drag-handle">⋮⋮</span>
+    <button id="cf-minimize-btn" title="Minimize">−</button>
+    ${onSearchPage ? '<button id="scan-jobs-btn" class="cf-action-btn">Scan</button>' : ''}
+    <button id="summarize-btn" class="cf-action-btn">Summarize</button>
+    <button id="assess-btn" class="cf-action-btn">Assess</button>
 `;
 document.body.appendChild(buttonContainer);
+
+// --- Draggable functionality ---
+let isDragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+buttonContainer.addEventListener('mousedown', (e) => {
+    // Only start drag on the handle or container background (not buttons)
+    if (e.target.tagName === 'BUTTON') return;
+
+    isDragging = true;
+    const rect = buttonContainer.getBoundingClientRect();
+    dragOffsetX = e.clientX - rect.left;
+    dragOffsetY = e.clientY - rect.top;
+    buttonContainer.style.cursor = 'grabbing';
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+
+    const x = e.clientX - dragOffsetX;
+    const y = e.clientY - dragOffsetY;
+
+    // Keep within viewport bounds
+    const maxX = window.innerWidth - buttonContainer.offsetWidth;
+    const maxY = window.innerHeight - buttonContainer.offsetHeight;
+
+    buttonContainer.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
+    buttonContainer.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
+    buttonContainer.style.right = 'auto';
+});
+
+document.addEventListener('mouseup', () => {
+    if (isDragging) {
+        isDragging = false;
+        buttonContainer.style.cursor = 'move';
+    }
+});
+
+// --- Minimize functionality ---
+const minimizeBtn = document.getElementById('cf-minimize-btn');
+minimizeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isMinimized = buttonContainer.classList.toggle('minimized');
+    minimizeBtn.textContent = isMinimized ? '+' : '−';
+    minimizeBtn.title = isMinimized ? 'Expand' : 'Minimize';
+});
 
 // --- 2. Create the modal (initially hidden) ---
 const modal = document.createElement('div');
@@ -158,24 +207,39 @@ document.addEventListener('click', (event) => {
 
 // --- Helper function to get job text (stripped of HTML) ---
 function getJobText() {
-    // Selectors for different job sites
+    // Selectors for different job sites - ORDER MATTERS, most specific first
     const selectors = [
-        // Amazon
-        '#job-detail-body',
-        '.job-detail',
-        '[data-job-id]',
-        '.job-description',
-        // LinkedIn
+        // LinkedIn 2024/2025 - updated selectors
+        '.jobs-description-content',
+        '.jobs-description__content',
+        '.jobs-description-content__text',
+        '.job-details-jobs-unified-top-card__job-insight',
+        '.jobs-unified-top-card__job-insight',
+        '[class*="jobs-description"]',
+        '.jobs-box__html-content',
+        '.jobs-search__job-details--wrapper',
         '.jobs-search__job-details',
         '.jobs-description',
         '.jobs-details__main-content',
         '.scaffold-layout__detail',
+        // Try article inside scaffold
+        '.scaffold-layout__detail article',
         // Indeed
         '#jobDescriptionText',
         '.jobsearch-jobDescriptionText',
         // Glassdoor
         '.jobDescriptionContent',
         '[data-test="jobDescription"]',
+        // Microsoft Careers
+        '[class*="JobDescription"]',
+        '[class*="jobDescription"]',
+        '[class*="description-"] .content',
+        '[class*="description-"]',
+        '.ms-Stack [class*="content"]',
+        // Amazon
+        '#job-detail-body',
+        '.job-detail',
+        '.job-description',
         // Lever
         '.posting-page',
         // Greenhouse
@@ -184,15 +248,20 @@ function getJobText() {
         '.job-details',
         '[class*="job-detail"]',
         '[class*="JobDetail"]',
-        // Generic fallbacks - be more specific
+        // Generic fallbacks
         '[class*="job-description"]',
-        '[class*="jobDescription"]',
-        '[id*="job"]',
         'main',
         'article',
-        // Last resort - just get the body
+        // Last resort
         'body',
     ];
+
+    // Debug: log all elements with 'description' in class name
+    console.log('CareerFit DEBUG: Elements with description in class:');
+    document.querySelectorAll('[class*="description"]').forEach(el => {
+        const text = (el.innerText || '').substring(0, 100);
+        console.log('  -', el.className.substring(0, 80), '| Length:', el.innerText?.length || 0, '| Preview:', text.substring(0, 50));
+    });
 
     for (const selector of selectors) {
         const container = document.querySelector(selector);
@@ -201,11 +270,19 @@ function getJobText() {
             const text = container.innerText || container.textContent;
             // Clean up: remove extra whitespace
             const cleanText = text.replace(/\s+/g, ' ').trim();
-            console.log('CareerFit: Found job using selector:', selector, 'Length:', cleanText.length);
-            return cleanText;
+            // Require minimum length to avoid matching tiny elements like "Saved jobs"
+            if (cleanText.length >= 200) {
+                console.log('CareerFit: Found job using selector:', selector, 'Length:', cleanText.length);
+                return cleanText;
+            } else {
+                console.log('CareerFit: Skipping selector (too short):', selector, 'Length:', cleanText.length);
+            }
         }
     }
-    return null;
+    // If no good match found, fall back to body
+    const bodyText = document.body.innerText?.replace(/\s+/g, ' ').trim() || '';
+    console.log('CareerFit: Using body fallback, Length:', bodyText.length);
+    return bodyText;
 }
 
 // --- Helper function to show loading state ---
@@ -241,7 +318,17 @@ document.getElementById('summarize-btn').addEventListener('click', () => {
 });
 
 // --- 5. Handle Compare to Resume button click ---
-document.getElementById('assess-btn').addEventListener('click', () => {
+document.getElementById('assess-btn').addEventListener('click', async () => {
+    // First, check if we have cached results for this job
+    const jobInfo = extractCurrentJobInfo();
+    const cachedResult = await getCachedAssessment(jobInfo);
+
+    if (cachedResult) {
+        console.log('CareerFit: Found cached assessment for:', jobInfo.title);
+        showCachedAssessment(cachedResult);
+        return;
+    }
+
     showLoading('Comparing to your resume...');
 
     const jobText = getJobText();
@@ -253,14 +340,165 @@ document.getElementById('assess-btn').addEventListener('click', () => {
     }
 });
 
+// --- Safe storage access (handles extension context invalidation) ---
+async function safeStorageGet(keys) {
+    try {
+        if (!chrome?.storage?.local) {
+            console.warn('CareerFit: Extension context invalidated, reload the page');
+            return {};
+        }
+        return await chrome.storage.local.get(keys);
+    } catch (e) {
+        console.warn('CareerFit: Storage access failed:', e.message);
+        return {};
+    }
+}
+
+async function safeStorageSet(data) {
+    try {
+        if (!chrome?.storage?.local) {
+            console.warn('CareerFit: Extension context invalidated, reload the page');
+            return false;
+        }
+        await chrome.storage.local.set(data);
+        return true;
+    } catch (e) {
+        console.warn('CareerFit: Storage write failed:', e.message);
+        return false;
+    }
+}
+
+// --- Check for cached assessment ---
+async function getCachedAssessment(jobInfo) {
+    if (!jobInfo.title) return null;
+
+    const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
+    const jobId = btoa(`${jobInfo.title}|${jobInfo.company || 'Unknown'}|${window.location.href}`).slice(0, 32);
+
+    const cached = jobHistory.find(j => j.id === jobId && j.analysis && j.analysis.fitScore);
+    return cached;
+}
+
+// --- Display cached assessment ---
+function showCachedAssessment(cachedJob) {
+    modal.style.display = 'block';
+    const modalContent = document.getElementById('assess-modal-content');
+
+    const analysis = cachedJob.analysis;
+    const summary = cachedJob.summary || {};
+    const fitScore = analysis.fitScore;
+
+    let scoreColor = '#9e9e9e';
+    if (fitScore >= 4) scoreColor = '#4caf50';
+    else if (fitScore >= 3) scoreColor = '#ff9800';
+    else if (fitScore >= 2) scoreColor = '#ff5722';
+    else if (fitScore >= 1) scoreColor = '#f44336';
+
+    const scannedDate = new Date(cachedJob.scannedAt).toLocaleDateString();
+    const years = summary.yearsRequired || 'Not specified';
+    const managerType = summary.managerType || '';
+    const func = summary.function || '';
+    const uniqueReqs = summary.uniqueRequirements || [];
+
+    let html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5;">`;
+
+    // Cached banner
+    html += `
+        <div style="background: #fff3e0; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; font-size: 11px; color: #e65100; display: flex; justify-content: space-between; align-items: center;">
+            <span>📋 Cached from ${scannedDate}</span>
+            <button id="refresh-assess" style="background: #ff9800; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Refresh</button>
+        </div>
+    `;
+
+    // Score badge
+    html += `
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #eee;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: ${scoreColor}; display: flex; align-items: center; justify-content: center;">
+                <span style="color: white; font-size: 24px; font-weight: 700;">${fitScore}</span>
+            </div>
+            <div>
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">Fit Score</div>
+                <div style="font-size: 18px; font-weight: 600; color: ${scoreColor};">${fitScore >= 4 ? 'Great Match' : fitScore >= 3 ? 'Good Match' : fitScore >= 2 ? 'Stretch' : 'Low Match'}</div>
+            </div>
+        </div>
+    `;
+
+    // Role basics
+    html += `
+        <div style="margin-bottom: 16px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                <span style="background: #e3f2fd; color: #1565c0; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${years}</span>
+                ${managerType ? `<span style="background: ${managerType === 'People Manager' ? '#f3e5f5' : '#e8f5e9'}; color: ${managerType === 'People Manager' ? '#7b1fa2' : '#2e7d32'}; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${managerType}</span>` : ''}
+            </div>
+            ${func ? `<p style="margin: 0; font-size: 14px; color: #555;">${func}</p>` : ''}
+        </div>
+    `;
+
+    // Role requirements
+    if (uniqueReqs.length > 0) {
+        html += `
+            <div style="margin-bottom: 16px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px;">Role Looking For</div>
+                <ul style="margin: 0; padding-left: 16px;">
+                    ${uniqueReqs.map(req => `<li style="font-size: 13px; color: #333; margin-bottom: 4px;">${req}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    // Gaps with learning resources
+    const gaps = analysis.gaps || [];
+    if (gaps.length > 0) {
+        html += `
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #e65100; margin-bottom: 10px;">Gaps</div>
+                ${gaps.map(gap => {
+                    if (typeof gap === 'string') {
+                        return `<div style="background: #fff8e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
+                            <div style="font-size: 13px; font-weight: 600; color: #333;">${gap}</div>
+                        </div>`;
+                    }
+                    return `<div style="background: #fff8e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
+                        <div style="font-size: 13px; font-weight: 600; color: #333;">${gap.skill || gap}</div>
+                        ${gap.resources ? `<div style="font-size: 12px; color: #555; margin: 4px 0;">Learn: ${gap.resources}</div>` : ''}
+                        ${gap.funFact ? `<div style="font-size: 11px; color: #888; font-style: italic;">${gap.funFact}</div>` : ''}
+                    </div>`;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    html += `</div>`;
+    modalContent.innerHTML = html;
+
+    // Add refresh button handler
+    document.getElementById('refresh-assess')?.addEventListener('click', () => {
+        showLoading('Refreshing assessment...');
+        const jobText = getJobText();
+        if (jobText) {
+            chrome.runtime.sendMessage({ type: 'analyzeJobHtml', text: jobText });
+        } else {
+            showError('Could not find job details on this page.');
+        }
+    });
+}
+
 // --- 6. Listen for results from the background script ---
 chrome.runtime.onMessage.addListener((message) => {
     const modalContent = document.getElementById('assess-modal-content');
 
     if (message.type === 'summaryResult') {
         modalContent.innerHTML = message.data;
+        // Save to job history if we have summary data
+        if (message.summary) {
+            saveSummaryToHistory(message.summary);
+        }
     } else if (message.type === 'analysisResult') {
         modalContent.innerHTML = message.data;
+        // Save to job history if we have analysis data
+        if (message.analysis) {
+            saveAssessmentToHistory(message.analysis);
+        }
     } else if (message.type === 'analysisError') {
         modalContent.innerHTML = `<p style="color:red;">${message.error}</p>`;
     } else if (message.type === 'scoreJobResult') {
@@ -268,6 +506,195 @@ chrome.runtime.onMessage.addListener((message) => {
         handleScoreResult(message);
     }
 });
+
+// --- Save individual "Assess fit" results to history ---
+async function saveAssessmentToHistory(analysis) {
+    // Try to extract job info from the page
+    const jobInfo = extractCurrentJobInfo();
+    if (!jobInfo.title) {
+        console.log('CareerFit: Could not extract job info, skipping history save');
+        return;
+    }
+
+    await saveJobToHistory({
+        title: jobInfo.title,
+        company: jobInfo.company || 'Unknown',
+        location: jobInfo.location || '',
+        link: window.location.href,
+        score: analysis.fitScore,
+        analysis: {
+            fitScore: analysis.fitScore,
+            gaps: analysis.gaps // Now an array of objects with skill, why, resources, funFact
+        },
+        // Include summary data from combined API call
+        summary: {
+            yearsRequired: analysis.yearsRequired,
+            managerType: analysis.managerType,
+            function: analysis.function,
+            uniqueRequirements: analysis.uniqueRequirements
+        },
+        status: analysis.fitScore >= 4 ? 'interested' : 'scanned'
+    });
+    console.log('CareerFit: Saved assessment to history:', jobInfo.title, 'Score:', analysis.fitScore);
+}
+
+// --- Save "Summarize Role" results to history (no score, just summary) ---
+async function saveSummaryToHistory(summary) {
+    // Try to extract job info from the page
+    const jobInfo = extractCurrentJobInfo();
+    if (!jobInfo.title) {
+        console.log('CareerFit: Could not extract job info, skipping history save');
+        return;
+    }
+
+    await saveJobToHistory({
+        title: jobInfo.title,
+        company: jobInfo.company || 'Unknown',
+        location: jobInfo.location || '',
+        link: window.location.href,
+        score: null, // Summarize Role doesn't score
+        analysis: null,
+        summary: {
+            yearsRequired: summary.yearsRequired,
+            managerType: summary.managerType,
+            function: summary.function,
+            uniqueRequirements: summary.uniqueRequirements
+        },
+        status: 'scanned'
+    });
+    console.log('CareerFit: Saved summary to history:', jobInfo.title);
+}
+
+// --- Extract job info from current page ---
+function extractCurrentJobInfo() {
+    const host = window.location.hostname;
+    let title = '';
+    let company = '';
+    let location = '';
+
+    // First, try to get data from JSON-LD structured data (most reliable)
+    const jsonLdData = extractFromJsonLd();
+    if (jsonLdData.title) {
+        console.log('CareerFit: Extracted job info from JSON-LD:', jsonLdData);
+        return jsonLdData;
+    }
+
+    // LinkedIn
+    if (host.includes('linkedin.com')) {
+        title = document.querySelector('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1.t-24, .t-24.job-details-jobs-unified-top-card__job-title')?.textContent?.trim() || '';
+        company = document.querySelector('.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, .job-details-jobs-unified-top-card__primary-description-container a')?.textContent?.trim() || '';
+        location = document.querySelector('.job-details-jobs-unified-top-card__bullet, .jobs-unified-top-card__bullet, .job-details-jobs-unified-top-card__primary-description-container .tvm__text')?.textContent?.trim() || '';
+    }
+    // Indeed
+    else if (host.includes('indeed.com')) {
+        title = document.querySelector('.jobsearch-JobInfoHeader-title, [data-testid="jobsearch-JobInfoHeader-title"], h1[data-testid="jobTitle"]')?.textContent?.trim() || '';
+        company = document.querySelector('.jobsearch-InlineCompanyRating-companyHeader, [data-testid="inlineHeader-companyName"], [data-testid="companyName"]')?.textContent?.trim() || '';
+        location = document.querySelector('.jobsearch-JobInfoHeader-subtitle > div:last-child, [data-testid="job-location"], [data-testid="inlineHeader-companyLocation"]')?.textContent?.trim() || '';
+    }
+    // Microsoft Careers (careers.microsoft.com)
+    else if (host.includes('microsoft.com') || host.includes('careers.microsoft')) {
+        // New Microsoft careers site uses dynamic class names
+        title = document.querySelector('.position-title-3TPtN, [class*="position-title"], h2[class*="position"], .title-1aNJK')?.textContent?.trim() || '';
+        // Fallback to h1 or h2 if position title not found
+        if (!title) {
+            title = document.querySelector('h2')?.textContent?.trim() || document.querySelector('h1')?.textContent?.trim() || '';
+        }
+        company = 'Microsoft';
+        location = document.querySelector('.position-location-12ZUO, [class*="position-location"], .fieldValue-3kEar')?.textContent?.trim() || '';
+    }
+    // Greenhouse
+    else if (host.includes('greenhouse.io')) {
+        title = document.querySelector('.job-title, h1, .app-title')?.textContent?.trim() || '';
+        company = document.querySelector('.company-name, .company')?.textContent?.trim() || '';
+        location = document.querySelector('.location, [class*="location"]')?.textContent?.trim() || '';
+    }
+    // Lever
+    else if (host.includes('lever.co')) {
+        title = document.querySelector('.posting-headline h2, h2')?.textContent?.trim() || '';
+        company = document.querySelector('.posting-categories .sort-by-team, .main-header-logo img')?.getAttribute('alt') || '';
+        location = document.querySelector('.posting-categories .sort-by-location, .location')?.textContent?.trim() || '';
+    }
+    // Workday (used by many companies)
+    else if (host.includes('workday.com') || host.includes('myworkdayjobs.com')) {
+        title = document.querySelector('h1, [data-automation-id="jobPostingHeader"], .css-1q2dra3')?.textContent?.trim() || '';
+        company = document.querySelector('[data-automation-id="company"], .css-1saizt3')?.textContent?.trim() || '';
+        location = document.querySelector('[data-automation-id="locations"], .css-129m7dg')?.textContent?.trim() || '';
+    }
+    // Amazon Jobs
+    else if (host.includes('amazon.jobs') || host.includes('amazon.com')) {
+        title = document.querySelector('.job-title, h1.title, h1')?.textContent?.trim() || '';
+        company = 'Amazon';
+        location = document.querySelector('.location-icon + span, .job-location, [class*="location"]')?.textContent?.trim() || '';
+    }
+    // Google Careers
+    else if (host.includes('google.com/about/careers') || host.includes('careers.google.com')) {
+        title = document.querySelector('h1, .gc-card__title')?.textContent?.trim() || '';
+        company = 'Google';
+        location = document.querySelector('.gc-job-detail__location, [class*="location"]')?.textContent?.trim() || '';
+    }
+    // Generic fallback - try multiple patterns
+    else {
+        // Try h1 first, but filter out generic page titles
+        const h1 = document.querySelector('h1');
+        if (h1) {
+            const h1Text = h1.textContent?.trim() || '';
+            // Only use h1 if it looks like a job title (not too long, not generic)
+            if (h1Text.length < 100 && !h1Text.toLowerCase().includes('careers') && !h1Text.toLowerCase().includes('jobs at')) {
+                title = h1Text;
+            }
+        }
+        if (!title) {
+            title = document.querySelector('.job-title, [class*="jobTitle"], [class*="job-title"], [data-testid*="title"]')?.textContent?.trim() || '';
+        }
+        company = document.querySelector('.company-name, [class*="company"], [class*="employer"], [data-testid*="company"]')?.textContent?.trim() || '';
+        location = document.querySelector('.location, [class*="location"], [data-testid*="location"]')?.textContent?.trim() || '';
+    }
+
+    console.log('CareerFit: Extracted job info from DOM:', { title, company, location });
+    return { title, company, location };
+}
+
+// --- Extract job info from JSON-LD structured data ---
+function extractFromJsonLd() {
+    let title = '';
+    let company = '';
+    let location = '';
+
+    try {
+        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+        for (const script of scripts) {
+            const data = JSON.parse(script.textContent);
+
+            // Handle both single object and array of objects
+            const items = Array.isArray(data) ? data : [data];
+
+            for (const item of items) {
+                if (item['@type'] === 'JobPosting') {
+                    title = item.title || '';
+                    company = item.hiringOrganization?.name || '';
+
+                    // Location can be object or array
+                    if (item.jobLocation) {
+                        const loc = Array.isArray(item.jobLocation) ? item.jobLocation[0] : item.jobLocation;
+                        if (loc.address) {
+                            const addr = loc.address;
+                            location = [addr.addressLocality, addr.addressRegion].filter(Boolean).join(', ');
+                        } else if (typeof loc === 'string') {
+                            location = loc;
+                        }
+                    }
+
+                    if (title) break;
+                }
+            }
+            if (title) break;
+        }
+    } catch (e) {
+        console.log('CareerFit: Error parsing JSON-LD:', e);
+    }
+
+    return { title, company, location };
+}
 
 // --- Phase 4: Quick Filter (No API call - fast pre-screening) ---
 function quickFilter(job, candidateProfile, hardFilters) {
@@ -335,7 +762,7 @@ async function handleScanJobs() {
     showLoading(`Found ${jobs.length} jobs. Loading your profile...`);
 
     // Get profile and filters from storage
-    const data = await chrome.storage.local.get(['candidateProfile', 'hardFilters']);
+    const data = await safeStorageGet(['candidateProfile', 'hardFilters']);
 
     if (!data.candidateProfile) {
         showError('Please analyze your resume first in the extension options (right-click extension icon → Options).');
@@ -661,7 +1088,7 @@ if (onSearchPage) {
 
 // --- 6.1: Job History Storage ---
 async function saveJobToHistory(job) {
-    const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+    const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
 
     // Create a unique ID for the job based on title + company + link
     const jobId = btoa(`${job.title}|${job.company}|${job.link}`).slice(0, 32);
@@ -677,6 +1104,7 @@ async function saveJobToHistory(job) {
         link: job.link,
         score: job.score || null,
         analysis: job.analysis || null,
+        summary: job.summary || null, // From Summarize Role
         status: job.status || 'scanned', // scanned, interested, applied, rejected, interview
         scannedAt: job.scannedAt || new Date().toISOString(),
         appliedAt: job.appliedAt || null,
@@ -701,13 +1129,17 @@ async function saveJobToHistory(job) {
         jobHistory.splice(500);
     }
 
-    await chrome.storage.local.set({ jobHistory });
+    await safeStorageSet({ jobHistory });
     console.log('CareerFit: Saved job to history:', jobRecord.title);
+
+    // Also save to Firebase (async, don't wait)
+    chrome.runtime.sendMessage({ type: 'saveJobToCloud', job: jobRecord });
+
     return jobRecord;
 }
 
 async function updateJobStatus(jobId, status, notes = null) {
-    const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+    const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
     const jobIndex = jobHistory.findIndex(j => j.id === jobId);
 
     if (jobIndex >= 0) {
@@ -718,15 +1150,27 @@ async function updateJobStatus(jobId, status, notes = null) {
         if (notes !== null) {
             jobHistory[jobIndex].notes = notes;
         }
-        await chrome.storage.local.set({ jobHistory });
+        await safeStorageSet({ jobHistory });
         console.log('CareerFit: Updated job status:', jobHistory[jobIndex].title, '->', status);
+
+        // Also update in Firebase (async, don't wait)
+        chrome.runtime.sendMessage({
+            type: 'updateJobInCloud',
+            jobId: jobId,
+            updates: {
+                status,
+                appliedAt: jobHistory[jobIndex].appliedAt,
+                notes: jobHistory[jobIndex].notes
+            }
+        });
+
         return jobHistory[jobIndex];
     }
     return null;
 }
 
 async function getJobHistory(filter = 'all') {
-    const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+    const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
 
     if (filter === 'all') return jobHistory;
     return jobHistory.filter(j => j.status === filter);
@@ -748,7 +1192,7 @@ async function saveAllScanResults() {
 async function showJobHistory() {
     showLoading('Loading job history...');
 
-    const jobHistory = await getJobHistory();
+    let jobHistory = await getJobHistory();
 
     if (jobHistory.length === 0) {
         const modalContent = document.getElementById('assess-modal-content');
@@ -761,6 +1205,17 @@ async function showJobHistory() {
         `;
         return;
     }
+
+    // Sort by fit score (highest first), jobs without score at the end
+    jobHistory = [...jobHistory].sort((a, b) => {
+        const scoreA = a.score || 0;
+        const scoreB = b.score || 0;
+        if (scoreA === scoreB) {
+            // If same score, sort by date (most recent first)
+            return new Date(b.scannedAt) - new Date(a.scannedAt);
+        }
+        return scoreB - scoreA;
+    });
 
     // Group by status
     const applied = jobHistory.filter(j => j.status === 'applied');
@@ -829,7 +1284,7 @@ async function showJobHistory() {
     // Add clear history handler
     document.getElementById('clear-history-btn').addEventListener('click', async () => {
         if (confirm('Are you sure you want to clear all job history? This cannot be undone.')) {
-            await chrome.storage.local.set({ jobHistory: [] });
+            await safeStorageSet({ jobHistory: [] });
             showJobHistory(); // Refresh
         }
     });
@@ -852,7 +1307,25 @@ function renderHistoryList(jobs) {
             rejected: '#f44336'
         };
         const statusColor = statusColors[job.status] || '#999';
-        const scoreDisplay = job.score ? `<span style="background: ${getScoreColor(job.score)}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">${job.score}/5</span>` : '';
+
+        // Show score if available, otherwise show summary info or nothing
+        let infoDisplay = '';
+        if (job.score) {
+            infoDisplay = `<span style="background: ${getScoreColor(job.score)}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">${job.score}/5</span>`;
+        } else if (job.summary) {
+            // Show years/type from summary
+            const summaryInfo = [];
+            if (job.summary.yearsRequired && job.summary.yearsRequired !== 'Not specified') {
+                summaryInfo.push(job.summary.yearsRequired);
+            }
+            if (job.summary.managerType) {
+                summaryInfo.push(job.summary.managerType);
+            }
+            if (summaryInfo.length > 0) {
+                infoDisplay = `<span style="background: #e0e0e0; color: #666; padding: 2px 6px; border-radius: 10px; font-size: 11px;">${summaryInfo.join(' · ')}</span>`;
+            }
+        }
+
         const dateDisplay = job.appliedAt ?
             `Applied ${new Date(job.appliedAt).toLocaleDateString()}` :
             `Scanned ${new Date(job.scannedAt).toLocaleDateString()}`;
@@ -861,7 +1334,7 @@ function renderHistoryList(jobs) {
             <div class="history-job-item" data-job-id="${job.id}" style="padding: 10px; margin: 6px 0; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${statusColor};">
                 <div style="display: flex; justify-content: space-between; align-items: start;">
                     <div style="flex: 1;">
-                        <strong style="font-size: 13px;">${job.title}</strong> ${scoreDisplay}<br>
+                        <strong style="font-size: 13px;">${job.title}</strong> ${infoDisplay}<br>
                         <span style="color: #666; font-size: 12px;">${job.company}</span><br>
                         <span style="color: #999; font-size: 10px;">${dateDisplay}</span>
                     </div>
@@ -907,7 +1380,7 @@ function attachHistoryListeners() {
     document.querySelectorAll('.match-bullets-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const jobId = e.target.dataset.jobId;
-            const { jobHistory = [] } = await chrome.storage.local.get(['jobHistory']);
+            const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
             const job = jobHistory.find(j => j.id === jobId);
             if (job) {
                 showBulletMatching(job);

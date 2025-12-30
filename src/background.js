@@ -2,10 +2,95 @@ import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CandidateProfileSchema, FitAnalysisSchema, getJsonSchema } from './schemas.js';
+import {
+    initFirebase,
+    saveJobToFirebase,
+    getJobsFromFirebase,
+    updateJobInFirebase,
+    deleteJobFromFirebase,
+    clearFirebaseHistory,
+    syncLocalToFirebase,
+    isFirebaseReady
+} from './firebase.js';
 
 console.log('CareerFit: Background script loading...');
 
+// Helper to clean JSON Schema for Gemini (removes unsupported fields)
+function cleanSchemaForGemini(schema) {
+    if (!schema || typeof schema !== 'object') return schema;
+
+    const cleaned = {};
+    for (const [key, value] of Object.entries(schema)) {
+        // Skip unsupported JSON Schema fields
+        if (['additionalProperties', '$schema'].includes(key)) continue;
+
+        if (Array.isArray(value)) {
+            cleaned[key] = value.map(item => cleanSchemaForGemini(item));
+        } else if (typeof value === 'object' && value !== null) {
+            cleaned[key] = cleanSchemaForGemini(value);
+        } else {
+            cleaned[key] = value;
+        }
+    }
+    return cleaned;
+}
+
+// Initialize Firebase when extension loads
+let firebaseInitialized = false;
+async function ensureFirebaseInit() {
+    if (firebaseInitialized) return;
+
+    // Get Firebase config from storage
+    const { firebaseConfig } = await chrome.storage.sync.get(['firebaseConfig']);
+    if (firebaseConfig) {
+        const result = await initFirebase(firebaseConfig);
+        if (result) {
+            firebaseInitialized = true;
+            console.log('CareerFit: Firebase ready');
+        }
+    }
+}
+
+// Try to initialize on startup
+ensureFirebaseInit();
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Handle Firebase operations
+    if (message.type === 'saveJobToCloud') {
+        handleSaveJobToCloud(message.job, sendResponse);
+        return true;
+    }
+
+    if (message.type === 'getJobsFromCloud') {
+        handleGetJobsFromCloud(sendResponse);
+        return true;
+    }
+
+    if (message.type === 'updateJobInCloud') {
+        handleUpdateJobInCloud(message.jobId, message.updates, sendResponse);
+        return true;
+    }
+
+    if (message.type === 'syncToCloud') {
+        handleSyncToCloud(message.jobs, sendResponse);
+        return true;
+    }
+
+    if (message.type === 'clearCloudHistory') {
+        handleClearCloudHistory(sendResponse);
+        return true;
+    }
+
+    if (message.type === 'setFirebaseConfig') {
+        handleSetFirebaseConfig(message.config, sendResponse);
+        return true;
+    }
+
+    if (message.type === 'checkFirebaseStatus') {
+        sendResponse({ ready: isFirebaseReady() });
+        return true;
+    }
+
     // Handle analyzeResume - uses sendResponse for options page
     if (message.type === 'analyzeResume') {
         chrome.storage.sync.get(['geminiApiKey', 'userResume'], async (data) => {
@@ -64,6 +149,82 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
+// --- Shared HTML formatting for consistent design ---
+function formatRoleHtml(data, options = {}) {
+    const { showScore = false, fitScore = null, gaps = [], isAssess = false } = options;
+    const years = data.yearsRequired || 'Not specified';
+    const managerType = data.managerType || '';
+    const func = data.function || '';
+    const uniqueReqs = data.uniqueRequirements || [];
+
+    // Score color
+    let scoreColor = '#9e9e9e';
+    if (fitScore >= 4) scoreColor = '#4caf50';
+    else if (fitScore >= 3) scoreColor = '#ff9800';
+    else if (fitScore >= 2) scoreColor = '#ff5722';
+    else if (fitScore >= 1) scoreColor = '#f44336';
+
+    let html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5;">`;
+
+    // Score badge (only for Assess)
+    if (showScore && fitScore !== null) {
+        html += `
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #eee;">
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: ${scoreColor}; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: white; font-size: 24px; font-weight: 700;">${fitScore}</span>
+                </div>
+                <div>
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">Fit Score</div>
+                    <div style="font-size: 18px; font-weight: 600; color: ${scoreColor};">${fitScore >= 4 ? 'Great Match' : fitScore >= 3 ? 'Good Match' : fitScore >= 2 ? 'Stretch' : 'Low Match'}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Role basics
+    html += `
+        <div style="margin-bottom: 16px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                <span style="background: #e3f2fd; color: #1565c0; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${years}</span>
+                ${managerType ? `<span style="background: ${managerType === 'People Manager' ? '#f3e5f5' : '#e8f5e9'}; color: ${managerType === 'People Manager' ? '#7b1fa2' : '#2e7d32'}; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${managerType}</span>` : ''}
+            </div>
+            ${func ? `<p style="margin: 0; font-size: 14px; color: #555;">${func}</p>` : ''}
+        </div>
+    `;
+
+    // Role requirements
+    if (uniqueReqs.length > 0) {
+        html += `
+            <div style="margin-bottom: 16px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px;">Role Looking For</div>
+                <ul style="margin: 0; padding-left: 16px;">
+                    ${uniqueReqs.map(req => `<li style="font-size: 13px; color: #333; margin-bottom: 4px;">${req}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else if (!isAssess) {
+        html += `<p style="color: #888; font-style: italic; font-size: 13px;">Standard role - no specific requirements</p>`;
+    }
+
+    // Gaps with learning resources (only for Assess)
+    if (isAssess && gaps.length > 0) {
+        html += `
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #e65100; margin-bottom: 10px;">Gaps</div>
+                ${gaps.map(gap => `
+                    <div style="background: #fff8e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
+                        <div style="font-size: 13px; font-weight: 600; color: #333;">${gap.skill || 'Unknown skill'}</div>
+                        ${gap.resources ? `<div style="font-size: 12px; color: #555; margin: 4px 0;">Learn: ${gap.resources}</div>` : ''}
+                        ${gap.funFact ? `<div style="font-size: 11px; color: #888; font-style: italic;">${gap.funFact}</div>` : ''}
+                    </div>`).join('')}
+            </div>
+        `;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
 async function summarizeRole(jobText, apiKey, tabId) {
     try {
         const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
@@ -75,7 +236,8 @@ async function summarizeRole(jobText, apiKey, tabId) {
             uniqueRequirements: z.array(z.string()).describe('What makes THIS role different. Include: specific domain/industry, specific products, specific tools/skills, company-specific processes, hardware vs software, target audience. Plain English + (original term). Max 8.')
         });
 
-        const schemaToBeProcessed = zodToJsonSchema(zodSchema);
+        const rawSchema = zodToJsonSchema(zodSchema);
+        const schemaToBeProcessed = cleanSchemaForGemini(rawSchema);
         schemaToBeProcessed['propertyOrdering'] = ['yearsRequired', 'managerType', 'function', 'uniqueRequirements'];
 
         const prompt = `Job: ${jobText}
@@ -91,7 +253,7 @@ Extract what makes this role UNIQUE:
             contents: prompt,
             config: {
                 responseMimeType: 'application/json',
-                responseJsonSchema: schemaToBeProcessed,
+                responseSchema: schemaToBeProcessed,
             },
         });
 
@@ -107,41 +269,31 @@ Extract what makes this role UNIQUE:
 
         console.log('CareerFit: Parsed data:', JSON.stringify(data, null, 2));
 
+        // Extract fields - schema enforces exact names
         const years = data.yearsRequired || 'Not specified';
         const managerType = data.managerType || '';
         const func = data.function || '';
+        const uniqueReqs = Array.isArray(data.uniqueRequirements) ? data.uniqueRequirements : [];
 
-        // Handle uniqueRequirements - could be strings or objects
-        let uniqueReqs = [];
-        if (Array.isArray(data.uniqueRequirements)) {
-            uniqueReqs = data.uniqueRequirements.map(req => {
-                if (typeof req === 'string') return req;
-                if (typeof req === 'object' && req !== null) {
-                    return req.requirement || req.text || req.value || req.name || JSON.stringify(req);
-                }
-                return String(req);
-            });
-        }
+        // Use shared formatting
+        const formattedHtml = formatRoleHtml({
+            yearsRequired: years,
+            managerType,
+            function: func,
+            uniqueRequirements: uniqueReqs
+        });
 
-        let formattedHtml = `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                <p style="margin: 0 0 5px 0; font-size: 16px; font-weight: 600; color: #333;">${years}${managerType ? ` · ${managerType}` : ''}</p>
-                ${func ? `<p style="margin: 0 0 15px 0; font-size: 14px; color: #666;">${func}</p>` : ''}
-        `;
-
-        if (uniqueReqs.length === 0) {
-            formattedHtml += `<p style="color: #888; font-style: italic;">Standard PM role - nothing unusual</p>`;
-        } else {
-            formattedHtml += `<ul style="margin: 0; padding-left: 20px; line-height: 2;">`;
-            for (const req of uniqueReqs) {
-                formattedHtml += `<li style="font-size: 15px; color: #333;">${req}</li>`;
+        // Send both HTML and raw data for history saving
+        chrome.tabs.sendMessage(tabId, {
+            type: 'summaryResult',
+            data: formattedHtml,
+            summary: {
+                yearsRequired: years,
+                managerType,
+                function: func,
+                uniqueRequirements: uniqueReqs
             }
-            formattedHtml += `</ul>`;
-        }
-
-        formattedHtml += `</div>`;
-
-        chrome.tabs.sendMessage(tabId, { type: 'summaryResult', data: formattedHtml });
+        });
 
     } catch (error) {
         console.error("Error summarizing role:", error);
@@ -156,54 +308,52 @@ async function callGemini(jobHtml, resume, apiKey, tabId) {
     try {
         const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
 
-        // Define the schema for structured output
-        const zodSchema = z.object({
-            fitScore: z.number().min(1).max(5).describe('Fit score from 1 to 5 (1=Poor Fit, 5=Excellent Fit)'),
-            reasoning: z.string().describe('Brief explanation for the score in one paragraph'),
-            strengths: z.array(z.string()).describe('2-3 key strengths from the resume that align with the job'),
-            gaps: z.array(z.string()).describe('1-2 key gaps or areas where the resume is weaker for this role')
+        // Use snake_case in schema (Gemini prefers it), then map to camelCase in code
+        const gapSchema = z.object({
+            skill_name: z.string().describe('The specific skill gap (e.g., "HIPAA compliance")'),
+            resources: z.string().describe('1-2 learning resources as a single string'),
+            surprising_fact: z.string().optional().describe('One surprising fact about this skill')
         });
 
-        const schemaToBeProcessed = zodToJsonSchema(zodSchema);
+        const zodSchema = z.object({
+            years_required: z.string().describe('Years of experience (e.g., "5+ years"). Say "Not specified" if not mentioned.'),
+            manager_type: z.string().describe('"IC" or "People Manager"'),
+            job_function: z.string().describe('What kind of work (e.g., "Product - building features")'),
+            unique_requirements: z.array(z.string()).describe('What makes this role unique. Max 8 items.'),
+            fit_score: z.number().min(1).max(5).describe('Fit score 1-5'),
+            gaps: z.array(gapSchema).describe('Skill gaps. Only real gaps, not nice-to-haves.')
+        });
+
+        const rawSchema = zodToJsonSchema(zodSchema);
+        const schemaToBeProcessed = cleanSchemaForGemini(rawSchema);
         schemaToBeProcessed['propertyOrdering'] = [
-            'fitScore',
-            'reasoning', 
-            'strengths',
+            'years_required',
+            'manager_type',
+            'job_function',
+            'unique_requirements',
+            'fit_score',
             'gaps'
         ];
 
-        const prompt = `
-            You are an expert career coach. Analyze the following resume against the provided job description HTML.
-            Provide a clear, concise analysis.
+        const prompt = `Analyze this job against the resume. Be concise.
 
-            **My Resume:**
-            ${resume}
+**Resume:**
+${resume}
 
-            ---
-
-            **Job Description HTML:**
-            ${jobHtml}
-
-            ---
-
-            Please provide:
-            1. A fit score from 1 to 5 (1=Poor Fit, 5=Excellent Fit)
-            2. Brief reasoning for your score in one paragraph
-            3. 2-3 key strengths from the resume that align with the job
-            4. 1-2 key gaps or areas where the resume is weaker for this role
-        `;
+**Job:**
+${jobHtml}`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 responseMimeType: 'application/json',
-                responseJsonSchema: schemaToBeProcessed,
+                responseSchema: schemaToBeProcessed,
             },
         });
 
         console.log('CareerFit: Raw API response text:', response.text);
-        
+
         let analysisData;
         try {
             analysisData = JSON.parse(response.text);
@@ -213,57 +363,59 @@ async function callGemini(jobHtml, resume, apiKey, tabId) {
             console.error('CareerFit: Raw response that failed to parse:', response.text);
             throw new Error('Invalid response format from AI service');
         }
-        
-        // Validate and provide defaults for missing data
-        const fitScore = (typeof analysisData.fitScore === 'number' && analysisData.fitScore >= 1 && analysisData.fitScore <= 5) 
-            ? analysisData.fitScore : 3;
-        const reasoning = (typeof analysisData.reasoning === 'string' && analysisData.reasoning.length > 0) 
-            ? analysisData.reasoning : 'Unable to generate detailed reasoning for this job analysis.';
-        const strengths = Array.isArray(analysisData.strengths) && analysisData.strengths.length > 0 
-            ? analysisData.strengths : ['Skills analysis available', 'Experience review completed'];
-        const gaps = Array.isArray(analysisData.gaps) && analysisData.gaps.length > 0 
-            ? analysisData.gaps : ['Areas for improvement identified'];
-        
-        // Determine color based on fit score
-        let scoreColor = '#f44336'; // Red for low scores
-        let scoreText = 'Poor Fit';
-        
-        if (fitScore >= 4) {
-            scoreColor = '#4caf50'; // Green for excellent fit
-            scoreText = 'Excellent Fit';
-        } else if (fitScore >= 3) {
-            scoreColor = '#ff9800'; // Orange for good fit
-            scoreText = 'Good Fit';
-        } else if (fitScore >= 2) {
-            scoreColor = '#ff5722'; // Red-orange for fair fit
-            scoreText = 'Fair Fit';
-        }
-        
-        // Format the response as HTML for display
-        const formattedHtml = `
-            <div style="background: ${scoreColor}15; border-left: 4px solid ${scoreColor}; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
-                <h3 style="margin: 0 0 5px 0; color: ${scoreColor};">Fit Score: ${fitScore}/5</h3>
-                <p style="margin: 0; font-weight: bold; color: ${scoreColor};">${scoreText}</p>
-            </div>
-            <h4 style="color: #333; margin-bottom: 10px;">Reasoning</h4>
-            <p style="margin-bottom: 15px; line-height: 1.5;">${reasoning}</p>
-            <h4 style="color: #4caf50; margin-bottom: 10px;">✓ Strengths</h4>
-            <ul style="margin-bottom: 15px;">
-                ${strengths.map(strength => `<li style="margin-bottom: 5px; color: #333;">${strength}</li>`).join('')}
-            </ul>
-            <h4 style="color: #ff9800; margin-bottom: 10px;">⚠ Areas for Improvement</h4>
-            <ul>
-                ${gaps.map(gap => `<li style="margin-bottom: 5px; color: #333;">${gap}</li>`).join('')}
-            </ul>
-        `;
 
-        // Send the formatted HTML back to the content script
-        chrome.tabs.sendMessage(tabId, { type: 'analysisResult', data: formattedHtml });
+        // Map snake_case from API to camelCase for internal use
+        const yearsRequired = analysisData.years_required || 'Not specified';
+        const managerType = analysisData.manager_type || '';
+        const func = analysisData.job_function || '';
+        const uniqueReqs = analysisData.unique_requirements || [];
+        const rawScore = analysisData.fit_score;
+        const fitScore = (typeof rawScore === 'number' && rawScore >= 1 && rawScore <= 5) ? rawScore : 3;
+
+        // Map gap fields from snake_case
+        const gaps = Array.isArray(analysisData.gaps)
+            ? analysisData.gaps.map(gap => ({
+                skill: gap.skill_name || 'Unknown skill',
+                resources: gap.resources || '',
+                funFact: gap.surprising_fact || ''
+            }))
+            : [];
+
+        // Use shared formatting function
+        const formattedHtml = formatRoleHtml(
+            {
+                yearsRequired,
+                managerType,
+                function: func,
+                uniqueRequirements: uniqueReqs
+            },
+            {
+                showScore: true,
+                fitScore,
+                gaps,
+                isAssess: true
+            }
+        );
+
+        // Send the formatted HTML and raw analysis data back to the content script
+        chrome.tabs.sendMessage(tabId, {
+            type: 'analysisResult',
+            data: formattedHtml,
+            analysis: {
+                fitScore,
+                gaps,
+                // Include summary data for saving to history
+                yearsRequired,
+                managerType,
+                function: func,
+                uniqueRequirements: uniqueReqs
+            }
+        });
 
     } catch (error) {
         console.error("Error calling Gemini:", error);
-        chrome.tabs.sendMessage(tabId, { 
-            type: 'analysisError', 
+        chrome.tabs.sendMessage(tabId, {
+            type: 'analysisError',
             error: `An error occurred during analysis: ${error.message}`
         });
     }
@@ -278,14 +430,16 @@ async function analyzeResume(resumeText, apiKey) {
 RESUME:
 ${resumeText}
 
+IMPORTANT: Carefully scan the ENTIRE resume including the Education section which is often at the bottom. Look for degree names (BS, BA, MS, MBA, PhD, etc.), university/college names, and fields of study.
+
 Extract the following structured data:
 
-1. yearsExperience: Total years of professional experience (e.g., "7", "5-7")
+1. yearsExperience: Total years of professional experience (e.g., "7", "5-7"). Calculate from earliest job date to present.
 2. seniorityLevel: Current career level (Entry/Mid/Senior/Manager/Director/VP)
-3. education: Educational background
-   - highestDegree: Highest degree (e.g., "MBA", "BS", "MS", "PhD", "High School")
-   - field: Field of study (e.g., "Computer Science", "Business Administration")
-   - schools: List of schools attended
+3. education: REQUIRED - Look for Education section in resume
+   - highestDegree: Highest degree earned. Use the degree abbreviation only: PhD, MBA, MS, MA, BS, BA, BBA, Associate's. Do NOT expand MBA to "MBA in Business Administration" - just say "MBA".
+   - field: Field of study / major / concentration. For MBA, use the concentration if any (e.g., "Finance", "Marketing") or leave as "General Management". For other degrees, use the actual major (e.g., "Business Information Technology", "Computer Science").
+   - schools: Array of ALL schools/universities attended with their degrees, highest first (e.g., ["Kelley School of Business (MBA)", "Virginia Tech (BS)"])
 4. functions: Types of work they do (e.g., ["Product Management", "Operations", "Engineering"])
 5. industries: Industries they've worked in (e.g., ["CPG", "Tech", "Automotive"])
 6. hardSkills: Technical skills - tools, languages, methodologies (e.g., ["SQL", "Python", "Agile"])
@@ -308,7 +462,7 @@ Be specific and actionable. The targetTitles and searchQueries will be used dire
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
-            responseJsonSchema: schemaJson,
+            responseSchema: schemaJson,
         },
     });
 
@@ -397,7 +551,7 @@ Based ONLY on title/company matching to candidate's target titles and experience
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
-            responseJsonSchema: schemaJson,
+            responseSchema: schemaJson,
         },
     });
 
@@ -450,7 +604,8 @@ async function matchResumeBullets(job, resumeText, apiKey) {
         suggestions: z.array(z.string()).describe('2-3 suggestions to strengthen the application')
     });
 
-    const schemaJson = zodToJsonSchema(bulletMatchSchema);
+    const rawSchema = zodToJsonSchema(bulletMatchSchema);
+    const schemaJson = cleanSchemaForGemini(rawSchema);
     schemaJson['propertyOrdering'] = ['matches', 'suggestions'];
 
     const prompt = `Analyze which parts of this resume best match this job posting.
@@ -476,7 +631,7 @@ Be selective - only include bullets that genuinely match. Quality over quantity.
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
-            responseJsonSchema: schemaJson,
+            responseSchema: schemaJson,
         },
     });
 
@@ -491,6 +646,84 @@ Be selective - only include bullets that genuinely match. Quality over quantity.
     }
 
     return result;
+}
+
+// --- Firebase Handler Functions ---
+
+async function handleSaveJobToCloud(job, sendResponse) {
+    await ensureFirebaseInit();
+    try {
+        const result = await saveJobToFirebase(job);
+        sendResponse({ success: !!result, data: result });
+    } catch (error) {
+        console.error('CareerFit: Error saving to cloud:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleGetJobsFromCloud(sendResponse) {
+    await ensureFirebaseInit();
+    try {
+        const jobs = await getJobsFromFirebase();
+        sendResponse({ success: true, data: jobs });
+    } catch (error) {
+        console.error('CareerFit: Error getting jobs from cloud:', error);
+        sendResponse({ success: false, error: error.message, data: [] });
+    }
+}
+
+async function handleUpdateJobInCloud(jobId, updates, sendResponse) {
+    await ensureFirebaseInit();
+    try {
+        const result = await updateJobInFirebase(jobId, updates);
+        sendResponse({ success: result });
+    } catch (error) {
+        console.error('CareerFit: Error updating job in cloud:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleSyncToCloud(jobs, sendResponse) {
+    await ensureFirebaseInit();
+    try {
+        const result = await syncLocalToFirebase(jobs);
+        sendResponse({ success: result });
+    } catch (error) {
+        console.error('CareerFit: Error syncing to cloud:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleClearCloudHistory(sendResponse) {
+    await ensureFirebaseInit();
+    try {
+        const result = await clearFirebaseHistory();
+        sendResponse({ success: result });
+    } catch (error) {
+        console.error('CareerFit: Error clearing cloud history:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleSetFirebaseConfig(config, sendResponse) {
+    try {
+        // Save config to storage
+        await chrome.storage.sync.set({ firebaseConfig: config });
+
+        // Re-initialize Firebase with new config
+        firebaseInitialized = false;
+        const result = await initFirebase(config);
+
+        if (result) {
+            firebaseInitialized = true;
+            sendResponse({ success: true });
+        } else {
+            sendResponse({ success: false, error: 'Failed to initialize Firebase' });
+        }
+    } catch (error) {
+        console.error('CareerFit: Error setting Firebase config:', error);
+        sendResponse({ success: false, error: error.message });
+    }
 }
 
 console.log('CareerFit: Background script loaded successfully');

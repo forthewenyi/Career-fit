@@ -221,3 +221,108 @@ function loadFilters(filters) {
         document.getElementById('excludeCompanies').value = filters.excludeCompanies.join(', ');
     }
 }
+
+// --- Firebase Cloud Sync ---
+
+const firebaseConfigInput = document.getElementById('firebaseConfig');
+const saveFirebaseBtn = document.getElementById('saveFirebaseBtn');
+const syncToCloudBtn = document.getElementById('syncToCloudBtn');
+const firebaseStatusSpan = document.getElementById('firebaseStatus');
+const firebaseStatusMsg = document.getElementById('firebaseStatusMsg');
+
+// Load Firebase config on page load
+document.addEventListener('DOMContentLoaded', () => {
+    chrome.storage.sync.get(['firebaseConfig'], (data) => {
+        if (data.firebaseConfig) {
+            firebaseConfigInput.value = JSON.stringify(data.firebaseConfig, null, 2);
+        }
+    });
+
+    // Check Firebase connection status
+    checkFirebaseStatus();
+});
+
+function checkFirebaseStatus() {
+    chrome.runtime.sendMessage({ type: 'checkFirebaseStatus' }, (response) => {
+        if (response && response.ready) {
+            firebaseStatusSpan.textContent = 'Connected';
+            firebaseStatusSpan.className = 'firebase-status firebase-connected';
+        } else {
+            firebaseStatusSpan.textContent = 'Not Connected';
+            firebaseStatusSpan.className = 'firebase-status firebase-disconnected';
+        }
+    });
+}
+
+// Save Firebase config
+saveFirebaseBtn.addEventListener('click', () => {
+    const configText = firebaseConfigInput.value.trim();
+
+    if (!configText) {
+        showFirebaseStatus('Please enter your Firebase config.', 'error');
+        return;
+    }
+
+    let config;
+    try {
+        config = JSON.parse(configText);
+    } catch (e) {
+        showFirebaseStatus('Invalid JSON. Please check your config format.', 'error');
+        return;
+    }
+
+    // Validate required fields
+    if (!config.apiKey || !config.projectId) {
+        showFirebaseStatus('Config must include apiKey and projectId.', 'error');
+        return;
+    }
+
+    showFirebaseStatus('Connecting to Firebase...', 'loading');
+
+    chrome.runtime.sendMessage({ type: 'setFirebaseConfig', config }, (response) => {
+        if (response && response.success) {
+            showFirebaseStatus('Connected to Firebase successfully!', 'success');
+            checkFirebaseStatus();
+        } else {
+            showFirebaseStatus('Failed to connect: ' + (response?.error || 'Unknown error'), 'error');
+        }
+    });
+});
+
+// Sync local history to cloud
+syncToCloudBtn.addEventListener('click', async () => {
+    showFirebaseStatus('Syncing to cloud...', 'loading');
+
+    // Get local job history
+    chrome.storage.local.get(['jobHistory'], (data) => {
+        const jobs = data.jobHistory || [];
+
+        if (jobs.length === 0) {
+            showFirebaseStatus('No local jobs to sync.', 'error');
+            return;
+        }
+
+        chrome.runtime.sendMessage({ type: 'syncToCloud', jobs }, (response) => {
+            if (response && response.success) {
+                showFirebaseStatus(`Synced ${jobs.length} jobs to cloud!`, 'success');
+            } else {
+                showFirebaseStatus('Sync failed: ' + (response?.error || 'Unknown error'), 'error');
+            }
+        });
+    });
+});
+
+function showFirebaseStatus(message, type) {
+    firebaseStatusMsg.textContent = message;
+    if (type === 'success') {
+        firebaseStatusMsg.style.color = '#4caf50';
+    } else if (type === 'error') {
+        firebaseStatusMsg.style.color = '#f44336';
+    } else {
+        firebaseStatusMsg.style.color = '#ff9800';
+    }
+
+    if (type === 'success') {
+        setTimeout(() => { firebaseStatusMsg.textContent = ''; }, 5000);
+    }
+}

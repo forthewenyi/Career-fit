@@ -43,8 +43,29 @@ export const FitAnalysisSchema = z.object({
     recommendation: z.enum(['Strong Apply', 'Apply', 'Consider', 'Skip']).describe('Action recommendation'),
 });
 
+// Helper to clean JSON Schema for Gemini (removes unsupported fields)
+function cleanSchemaForGemini(schema) {
+    if (!schema || typeof schema !== 'object') return schema;
+
+    const cleaned = {};
+    for (const [key, value] of Object.entries(schema)) {
+        // Skip unsupported JSON Schema fields
+        if (['additionalProperties', '$schema'].includes(key)) continue;
+
+        if (Array.isArray(value)) {
+            cleaned[key] = value.map(item => cleanSchemaForGemini(item));
+        } else if (typeof value === 'object' && value !== null) {
+            cleaned[key] = cleanSchemaForGemini(value);
+        } else {
+            cleaned[key] = value;
+        }
+    }
+    return cleaned;
+}
+
 export function getJsonSchema(zodSchema) {
-    const schema = zodToJsonSchema(zodSchema);
+    const rawSchema = zodToJsonSchema(zodSchema);
+    const schema = cleanSchemaForGemini(rawSchema);
     schema['propertyOrdering'] = Object.keys(zodSchema.shape);
     return schema;
 }

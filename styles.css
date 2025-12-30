@@ -27,6 +27,53 @@
     z-index: 9998;
     display: flex;
     gap: 8px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 6px 10px;
+    border-radius: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    cursor: move;
+    user-select: none;
+}
+
+#careerfit-buttons.minimized {
+    padding: 6px 8px;
+}
+
+#careerfit-buttons.minimized .cf-action-btn {
+    display: none;
+}
+
+/* Drag handle */
+#cf-drag-handle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    cursor: move;
+    color: #999;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+#cf-drag-handle:hover {
+    color: #666;
+}
+
+/* Minimize button */
+#cf-minimize-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    color: #999;
+    padding: 2px 6px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+#cf-minimize-btn:hover {
+    color: #333;
 }
 
 #summarize-btn {
