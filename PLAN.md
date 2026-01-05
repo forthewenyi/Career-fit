@@ -10,8 +10,9 @@
 | Phase 4: Quick Filter | ✅ DONE |
 | Phase 5: Full AI Scoring | ✅ DONE |
 | Phase 6: Apply Workflow | ✅ DONE |
+| Phase 7: Smarter Fit Scoring | ✅ DONE |
 
-**All phases complete!** The extension can:
+**Phases 1-7 complete!** The extension can:
 1. Analyze resumes and extract structured candidate profiles
 2. Configure hard filters (Director+, PhD, companies, etc.)
 3. Scan job search pages (LinkedIn, Indeed, Interstride, Greenhouse, Lever)
@@ -19,6 +20,7 @@
 5. Score remaining jobs with Gemini AI and display ranked results
 6. Track job history with status updates (Applied, Interview, etc.)
 7. Match resume bullets to specific jobs with AI analysis
+8. Distinguish minimum vs preferred qualifications with disqualifier warnings
 
 ---
 
@@ -47,26 +49,6 @@ ON-DEMAND:
 ---
 
 ## Future Phases
-
-### Phase 7: Smarter Fit Scoring (NOT STARTED)
-
-**Goal:** Distinguish between Minimum vs Preferred qualifications. Cap score if minimum quals are unmet.
-
-**Changes:**
-- Update schema to separate `disqualifiers` (missing minimum quals) from `gaps` (missing preferred quals)
-- If any disqualifier exists → cap fit_score at 2 and show warning
-- Add "⚠️ Missing minimum qualification" warning in UI
-- Remove trivia/surprising facts - replace with actionable resume keywords
-
-**Schema Update:**
-```javascript
-{
-  fit_score: 1-5,
-  disqualifiers: [{ requirement: "6 years consulting", reason: "Resume shows 3 years" }],
-  gaps: [{ skill: "Ads Policy", resources: "...", keywords: ["Trust & Safety", "Content Moderation"] }],
-  keywords_to_add: ["Stakeholder Management", "Go-to-Market Strategy"]
-}
-```
 
 ### Phase 8: Resume Tailor (NOT STARTED)
 

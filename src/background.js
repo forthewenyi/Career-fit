@@ -130,7 +130,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // --- Shared HTML formatting for consistent design ---
 function formatRoleHtml(data, options = {}) {
-    const { showScore = false, fitScore = null, gaps = [], isAssess = false } = options;
+    const { showScore = false, fitScore = null, gaps = [], disqualifiers = [], isAssess = false } = options;
     const years = data.yearsRequired || 'Not specified';
     const managerType = data.managerType || '';
     const func = data.function || '';
@@ -160,6 +160,24 @@ function formatRoleHtml(data, options = {}) {
         `;
     }
 
+    // Disqualifiers warning (missing minimum qualifications)
+    if (isAssess && disqualifiers.length > 0) {
+        html += `
+            <div style="background: #ffebee; border: 1px solid #ffcdd2; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 16px;">⚠️</span>
+                    <span style="font-size: 12px; font-weight: 600; color: #c62828; text-transform: uppercase; letter-spacing: 0.5px;">Missing Minimum Qualifications</span>
+                </div>
+                ${disqualifiers.map(d => `
+                    <div style="margin-bottom: 8px; padding-left: 24px;">
+                        <div style="font-size: 13px; color: #b71c1c; font-weight: 500;">${d.requirement}</div>
+                        ${d.resumeHas ? `<div style="font-size: 12px; color: #666; margin-top: 2px;">Your resume: ${d.resumeHas}</div>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
     // Role basics
     html += `
         <div style="margin-bottom: 16px;">
@@ -185,16 +203,21 @@ function formatRoleHtml(data, options = {}) {
         html += `<p style="color: #888; font-style: italic; font-size: 13px;">Standard role - no specific requirements</p>`;
     }
 
-    // Gaps with learning resources (only for Assess)
+    // Gaps with learning resources and keywords (only for Assess)
     if (isAssess && gaps.length > 0) {
         html += `
             <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #e65100; margin-bottom: 10px;">Gaps</div>
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #e65100; margin-bottom: 10px;">Skills to Develop</div>
                 ${gaps.map(gap => `
                     <div style="background: #fff8e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
                         <div style="font-size: 13px; font-weight: 600; color: #333;">${gap.skill || 'Unknown skill'}</div>
-                        ${gap.resources ? `<div style="font-size: 12px; color: #555; margin: 4px 0;">Learn: ${gap.resources}</div>` : ''}
-                        ${gap.funFact ? `<div style="font-size: 11px; color: #888; font-style: italic;">${gap.funFact}</div>` : ''}
+                        ${gap.resources ? `<div style="font-size: 12px; color: #555; margin: 4px 0;">📚 ${gap.resources}</div>` : ''}
+                        ${gap.keywords && gap.keywords.length > 0 ? `
+                            <div style="margin-top: 6px;">
+                                <span style="font-size: 11px; color: #888;">Add to resume: </span>
+                                ${gap.keywords.map(kw => `<span style="background: #e8f5e9; color: #2e7d32; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px;">${kw}</span>`).join('')}
+                            </div>
+                        ` : ''}
                     </div>`).join('')}
             </div>
         `;
@@ -287,20 +310,27 @@ async function callGemini(jobHtml, resume, apiKey, tabId) {
     try {
         const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
 
-        // Use snake_case in schema (Gemini prefers it), then map to camelCase in code
+        // Schema for disqualifiers (missing MINIMUM qualifications)
+        const disqualifierSchema = z.object({
+            requirement: z.string().describe('The minimum requirement not met (e.g., "6 years management consulting")'),
+            resume_has: z.string().describe('What the resume shows instead (e.g., "3 years strategy experience")')
+        });
+
+        // Schema for gaps (missing PREFERRED qualifications - fixable)
         const gapSchema = z.object({
-            skill_name: z.string().describe('The specific skill gap (e.g., "HIPAA compliance")'),
-            resources: z.string().describe('1-2 learning resources as a single string'),
-            surprising_fact: z.string().optional().describe('One surprising fact about this skill')
+            skill_name: z.string().describe('The specific skill gap'),
+            resources: z.string().describe('1-2 learning resources (courses, books, certifications)'),
+            keywords: z.array(z.string()).describe('2-3 keywords to add to resume for this skill')
         });
 
         const zodSchema = z.object({
-            years_required: z.string().describe('Years of experience (e.g., "5+ years"). Say "Not specified" if not mentioned.'),
+            years_required: z.string().describe('Years of experience required. Say "Not specified" if not mentioned.'),
             manager_type: z.string().describe('"IC" or "People Manager"'),
             job_function: z.string().describe('What kind of work (e.g., "Product - building features")'),
             unique_requirements: z.array(z.string()).describe('What makes this role unique. Max 8 items.'),
-            fit_score: z.number().min(1).max(5).describe('Fit score 1-5'),
-            gaps: z.array(gapSchema).describe('Skill gaps. Only real gaps, not nice-to-haves.')
+            disqualifiers: z.array(disqualifierSchema).describe('MINIMUM qualifications the candidate does NOT meet. Only include hard requirements from "Minimum Qualifications" section. Empty array if all minimums are met.'),
+            fit_score: z.number().min(1).max(5).describe('Fit score 1-5. If disqualifiers exist, score should be 1-2.'),
+            gaps: z.array(gapSchema).describe('PREFERRED qualifications gaps (nice-to-haves the candidate lacks). Not disqualifiers.')
         });
 
         const rawSchema = zodToJsonSchema(zodSchema);
@@ -310,11 +340,25 @@ async function callGemini(jobHtml, resume, apiKey, tabId) {
             'manager_type',
             'job_function',
             'unique_requirements',
+            'disqualifiers',
             'fit_score',
             'gaps'
         ];
 
-        const prompt = `Analyze this job against the resume. Be concise.
+        const prompt = `Analyze this job against the resume. CRITICAL: Distinguish between MINIMUM and PREFERRED qualifications.
+
+**MINIMUM QUALIFICATIONS** (usually labeled "Minimum qualifications", "Requirements", or "Must have"):
+- If candidate does NOT meet these → add to "disqualifiers" array
+- Examples: "6 years in management consulting", "Bachelor's degree required", "Must have CPA"
+
+**PREFERRED QUALIFICATIONS** (usually labeled "Preferred", "Nice to have", or "Bonus"):
+- If candidate lacks these → add to "gaps" array (these are learnable/fixable)
+- Examples: "Experience with Kubernetes preferred", "MBA is a plus"
+
+**Scoring Rules:**
+- If ANY disqualifier exists → fit_score MUST be 1 or 2
+- If no disqualifiers but some gaps → fit_score can be 3-4
+- If no disqualifiers and few/no gaps → fit_score can be 4-5
 
 **Resume:**
 ${resume}
@@ -348,15 +392,29 @@ ${jobHtml}`;
         const managerType = analysisData.manager_type || '';
         const func = analysisData.job_function || '';
         const uniqueReqs = analysisData.unique_requirements || [];
-        const rawScore = analysisData.fit_score;
+
+        // Extract disqualifiers (missing minimum qualifications)
+        const disqualifiers = Array.isArray(analysisData.disqualifiers)
+            ? analysisData.disqualifiers.map(d => ({
+                requirement: d.requirement || '',
+                resumeHas: d.resume_has || ''
+            }))
+            : [];
+
+        // Cap score at 2 if any disqualifiers exist
+        let rawScore = analysisData.fit_score;
+        if (disqualifiers.length > 0 && rawScore > 2) {
+            console.log('CareerFit: Capping score from', rawScore, 'to 2 due to disqualifiers');
+            rawScore = 2;
+        }
         const fitScore = (typeof rawScore === 'number' && rawScore >= 1 && rawScore <= 5) ? rawScore : 3;
 
-        // Map gap fields from snake_case
+        // Map gap fields from snake_case (now includes keywords instead of funFact)
         const gaps = Array.isArray(analysisData.gaps)
             ? analysisData.gaps.map(gap => ({
                 skill: gap.skill_name || 'Unknown skill',
                 resources: gap.resources || '',
-                funFact: gap.surprising_fact || ''
+                keywords: Array.isArray(gap.keywords) ? gap.keywords : []
             }))
             : [];
 
@@ -372,6 +430,7 @@ ${jobHtml}`;
                 showScore: true,
                 fitScore,
                 gaps,
+                disqualifiers,
                 isAssess: true
             }
         );
@@ -383,6 +442,7 @@ ${jobHtml}`;
             analysis: {
                 fitScore,
                 gaps,
+                disqualifiers,
                 // Include summary data for saving to history
                 yearsRequired,
                 managerType,
