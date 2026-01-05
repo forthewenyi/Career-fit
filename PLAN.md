@@ -48,7 +48,27 @@ ON-DEMAND:
 
 ## Future Phases
 
-### Phase 7: Resume Tailor (NOT STARTED)
+### Phase 7: Smarter Fit Scoring (NOT STARTED)
+
+**Goal:** Distinguish between Minimum vs Preferred qualifications. Cap score if minimum quals are unmet.
+
+**Changes:**
+- Update schema to separate `disqualifiers` (missing minimum quals) from `gaps` (missing preferred quals)
+- If any disqualifier exists → cap fit_score at 2 and show warning
+- Add "⚠️ Missing minimum qualification" warning in UI
+- Remove trivia/surprising facts - replace with actionable resume keywords
+
+**Schema Update:**
+```javascript
+{
+  fit_score: 1-5,
+  disqualifiers: [{ requirement: "6 years consulting", reason: "Resume shows 3 years" }],
+  gaps: [{ skill: "Ads Policy", resources: "...", keywords: ["Trust & Safety", "Content Moderation"] }],
+  keywords_to_add: ["Stakeholder Management", "Go-to-Market Strategy"]
+}
+```
+
+### Phase 8: Resume Tailor (NOT STARTED)
 
 **Goal:** Tell user what to UPDATE on their resume - missing keywords, bullet rewrites, skills to add.
 
@@ -63,7 +83,7 @@ ON-DEMAND:
 }
 ```
 
-### Phase 8: Interview Prep (NOT STARTED)
+### Phase 9: Interview Prep (NOT STARTED)
 
 **Goal:** Generate study content when user marks job as "Applied".
 

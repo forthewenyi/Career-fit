@@ -44,7 +44,7 @@ export const FitAnalysisSchema = z.object({
 });
 
 // Helper to clean JSON Schema for Gemini (removes unsupported fields)
-function cleanSchemaForGemini(schema) {
+export function cleanSchemaForGemini(schema) {
     if (!schema || typeof schema !== 'object') return schema;
 
     const cleaned = {};

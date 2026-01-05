@@ -1,39 +1,18 @@
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { CandidateProfileSchema, FitAnalysisSchema, getJsonSchema } from './schemas.js';
+import { CandidateProfileSchema, FitAnalysisSchema, getJsonSchema, cleanSchemaForGemini } from './schemas.js';
 import {
     initFirebase,
     saveJobToFirebase,
     getJobsFromFirebase,
     updateJobInFirebase,
-    deleteJobFromFirebase,
     clearFirebaseHistory,
     syncLocalToFirebase,
     isFirebaseReady
 } from './firebase.js';
 
 console.log('CareerFit: Background script loading...');
-
-// Helper to clean JSON Schema for Gemini (removes unsupported fields)
-function cleanSchemaForGemini(schema) {
-    if (!schema || typeof schema !== 'object') return schema;
-
-    const cleaned = {};
-    for (const [key, value] of Object.entries(schema)) {
-        // Skip unsupported JSON Schema fields
-        if (['additionalProperties', '$schema'].includes(key)) continue;
-
-        if (Array.isArray(value)) {
-            cleaned[key] = value.map(item => cleanSchemaForGemini(item));
-        } else if (typeof value === 'object' && value !== null) {
-            cleaned[key] = cleanSchemaForGemini(value);
-        } else {
-            cleaned[key] = value;
-        }
-    }
-    return cleaned;
-}
 
 // Initialize Firebase when extension loads
 let firebaseInitialized = false;
