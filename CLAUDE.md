@@ -17,7 +17,8 @@ rm -rf build && mkdir build && cp manifest.json options.html styles.css careerfi
 - `src/schemas.js` - Zod schemas, `cleanSchemaForGemini()`, `getJsonSchema()`
 - `src/firebase.js` - Cloud sync (optional)
 - `src/options.js` - Settings page logic
-- `PLAN.md` - Roadmap with future phases (Phase 7-9)
+- `output-preview.html` - UI component preview (open in browser to see all UI states)
+- `PLAN.md` - Roadmap with future phases (Phase 9-10)
 
 ## Architecture
 
@@ -116,7 +117,7 @@ const response = await ai.models.generateContent({
 
 ## UI Components (content.js)
 
-- **Button Container**: Draggable, minimizable, contains Summarize/Assess/Auto-fill/History buttons
+- **Button Container**: Draggable, starts minimized by default (shows only Assess + expand button), contains Summarize/Assess/Auto-fill/History buttons
 - **Modal**: Displays results with close button
 - **Score Badge**: Circular badge with color (green/orange/grey) based on fitScore 1-5
 - **History Modal**: 5 tabs - All Jobs, Interested, Applied, To Learn, Learned

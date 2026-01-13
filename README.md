@@ -33,11 +33,14 @@ CareerFit AI analyzes job postings against your resume in seconds, giving you:
 2. Click "Analyze My Resume" - AI extracts a structured profile with:
    - Years of experience and seniority level
    - Technical skills with years (all skills found)
-   - Certifications, functions, industries
+   - Certifications, functions, industries (all industries from every job)
 
 ### On Any Job Page
-- **Summarize** - Quick role overview (no API cost)
+Button bar starts minimized (Assess only). Click + to expand all buttons:
+- **Summarize** - Quick role overview
 - **Assess** - Deep fit analysis against your profile
+- **Auto-fill** - Fill application form fields
+- **History** - View/manage job history
 
 ### Profile-Based Matching
 Your resume is converted to structured data for job matching:
@@ -45,7 +48,7 @@ Your resume is converted to structured data for job matching:
 EXPERIENCE: 7 years | Level: Senior
 EDUCATION: MBA in Business (Kelley School)
 FUNCTIONS: Product Management, Strategy
-INDUSTRIES: Tech, E-commerce
+INDUSTRIES: Tech, E-commerce, CPG, SaaS, B2B
 
 TECHNICAL SKILLS:
 - SQL (5 years)
@@ -91,6 +94,8 @@ UI uses WGSN 2025 trend palette - combining restorative and minimal qualities wi
 - Action buttons: Creamy White (#F5F3E7) background with Dark Green (#2d6b52) text
 - Score badges: Green (#3d8b6e) for 4-5, Orange (#c9a050) for 3, Grey (#4a4a4a) for 1-2
 - Tab styling: Black text (#222) active, Grey (#666) inactive
+
+See `output-preview.html` for a live preview of all UI components.
 
 ## Installation
 

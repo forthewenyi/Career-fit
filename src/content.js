@@ -4,14 +4,16 @@ console.log('CareerFit: Current URL:', window.location.href);
 // --- 1. Create and inject the buttons ---
 const buttonContainer = document.createElement('div');
 buttonContainer.id = 'careerfit-buttons';
+// Start minimized by default
+buttonContainer.classList.add('minimized');
 
 buttonContainer.innerHTML = `
     <span id="cf-drag-handle">⋮⋮</span>
-    <button id="cf-minimize-btn" title="Minimize">−</button>
-    <button id="summarize-btn" class="cf-action-btn">Summarize</button>
+    <button id="summarize-btn" class="cf-action-btn cf-expandable">Summarize</button>
     <button id="assess-btn" class="cf-action-btn">Assess</button>
-    <button id="autofill-btn" class="cf-action-btn">Auto-fill</button>
-    <button id="history-btn" class="cf-action-btn">History</button>
+    <button id="autofill-btn" class="cf-action-btn cf-expandable">Auto-fill</button>
+    <button id="history-btn" class="cf-action-btn cf-expandable">History</button>
+    <button id="cf-minimize-btn" title="Expand">+</button>
 `;
 document.body.appendChild(buttonContainer);
 

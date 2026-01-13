@@ -21,11 +21,12 @@
 ### User Flow
 ```
 ONE TIME SETUP:
-  Resume → Gemini extracts profile → (Optional) Define hard filters
+  Resume → Gemini extracts profile (skills, industries, certifications) → (Optional) Define hard filters
 
-ON ANY JOB PAGE:
-  Click Summarize → Quick role overview
+ON ANY JOB PAGE (button bar starts minimized):
+  Click + to expand → Summarize | Assess | Auto-fill | History
   Click Assess → Full fit analysis with score, gaps, disqualifiers
+  Click Summarize → Quick role overview
   Click Auto-fill → Fill application form fields
   Click History → View/manage job history
 ```
@@ -41,6 +42,9 @@ ON ANY JOB PAGE:
 - Greenhouse job boards
 - Lever job boards
 - Auto-fill on Workday, Greenhouse, Lever
+
+### UI Preview
+Open `output-preview.html` in browser to see all UI components and states.
 
 ---
 

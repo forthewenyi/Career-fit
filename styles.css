@@ -182,7 +182,8 @@
     padding: 6px 8px;
 }
 
-#careerfit-buttons.minimized .cf-action-btn {
+/* Hide only expandable buttons when minimized (keep Assess visible) */
+#careerfit-buttons.minimized .cf-expandable {
     display: none;
 }
 

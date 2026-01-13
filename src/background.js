@@ -616,7 +616,9 @@ Extract the following for accurate job matching:
 
 4. functions: Types of work (e.g., ["Product Management", "Operations"])
 
-5. industries: Industries worked in (e.g., ["CPG", "Tech", "FinTech"])
+5. industries: ALL industries/sectors worked in. Include every company's industry.
+   Examples: "CPG", "Tech", "FinTech", "Healthcare", "Automotive", "Retail", "E-commerce", "Manufacturing", "Consulting", "Media", "Entertainment", "Education", "SaaS", "B2B", "B2C"
+   IMPORTANT: List every industry from every job on the resume. Be thorough.
 
 6. hardSkills: Array of ALL technical skills found in resume, each with:
    - skill: The skill name (e.g., "SQL", "Python", "Agile", "ServiceNow", "ITIL", "Tableau", "SAP")
