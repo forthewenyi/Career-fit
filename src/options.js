@@ -7,26 +7,60 @@ const statusDiv = document.getElementById('status');
 
 // Load saved settings when the page opens
 document.addEventListener('DOMContentLoaded', () => {
-    // Load API key and resume from sync storage
-    chrome.storage.sync.get(['geminiApiKey', 'userResume'], (data) => {
-        if (data.geminiApiKey) {
-            apiKeyInput.value = data.geminiApiKey;
+    // Load API key and candidate profile from sync storage
+    chrome.storage.sync.get(['geminiApiKey', 'candidateProfile'], (syncData) => {
+        if (syncData.geminiApiKey) {
+            apiKeyInput.value = syncData.geminiApiKey;
         }
-        if (data.userResume) {
-            resumeInput.value = data.userResume;
+
+        // If we have a synced profile, display it
+        if (syncData.candidateProfile) {
+            displayProfile(syncData.candidateProfile);
+        } else {
+            // No sync profile - try loading from Firebase
+            loadProfileFromCloud();
         }
     });
 
-    // Load existing profile from local storage
-    chrome.storage.local.get(['candidateProfile', 'hardFilters'], (data) => {
-        if (data.candidateProfile) {
-            displayProfile(data.candidateProfile);
+    // Load resume and filters from local storage
+    chrome.storage.local.get(['userResume', 'hardFilters'], (data) => {
+        if (data.userResume) {
+            resumeInput.value = data.userResume;
         }
         if (data.hardFilters) {
             loadFilters(data.hardFilters);
         }
+
+        // If no local resume, try loading from Firebase
+        if (!data.userResume) {
+            loadResumeFromCloud();
+        }
     });
 });
+
+// Load resume from Firebase cloud
+function loadResumeFromCloud() {
+    chrome.runtime.sendMessage({ type: 'loadResumeFromCloud' }, (response) => {
+        if (response && response.success && response.resume) {
+            resumeInput.value = response.resume;
+            // Also save to local storage
+            chrome.storage.local.set({ userResume: response.resume });
+            console.log('CareerFit: Resume loaded from cloud');
+        }
+    });
+}
+
+// Load profile from Firebase cloud
+function loadProfileFromCloud() {
+    chrome.runtime.sendMessage({ type: 'loadProfileFromCloud' }, (response) => {
+        if (response && response.success && response.profile) {
+            displayProfile(response.profile);
+            // Also save to local storage
+            chrome.storage.local.set({ candidateProfile: response.profile });
+            console.log('CareerFit: Profile loaded from cloud');
+        }
+    });
+}
 
 // Save settings when the button is clicked
 saveButton.addEventListener('click', () => {
@@ -38,11 +72,11 @@ saveButton.addEventListener('click', () => {
         return;
     }
 
-    chrome.storage.sync.set({
-        geminiApiKey: apiKey,
-        userResume: resume
-    }, () => {
-        showStatus('Settings saved successfully!', 'success');
+    // Save API key to sync (small), resume to local (large)
+    chrome.storage.sync.set({ geminiApiKey: apiKey }, () => {
+        chrome.storage.local.set({ userResume: resume }, () => {
+            showStatus('Settings saved successfully!', 'success');
+        });
     });
 });
 
@@ -57,32 +91,67 @@ analyzeButton.addEventListener('click', () => {
         return;
     }
 
-    // Save first, then analyze
-    chrome.storage.sync.set({
-        geminiApiKey: apiKey,
-        userResume: resume
-    }, () => {
-        // Now analyze
-        showStatus('Analyzing your resume...', 'loading');
-        analyzeButton.disabled = true;
+    // Check if resume has changed since last analysis
+    chrome.storage.local.get(['userResume', 'candidateProfile', 'lastAnalyzedResumeHash'], (data) => {
+        const currentHash = simpleHash(resume);
+        const hasExistingProfile = data.candidateProfile && data.candidateProfile.analyzedAt;
+        const resumeChanged = data.lastAnalyzedResumeHash !== currentHash;
 
-        chrome.runtime.sendMessage({ type: 'analyzeResume' }, (response) => {
-            analyzeButton.disabled = false;
-
-            if (chrome.runtime.lastError) {
-                showStatus('Error: ' + chrome.runtime.lastError.message, 'error');
+        // If profile exists and resume hasn't changed, ask user
+        if (hasExistingProfile && !resumeChanged) {
+            const lastAnalyzed = new Date(data.candidateProfile.analyzedAt).toLocaleDateString();
+            if (!confirm(`Your resume was last analyzed on ${lastAnalyzed} and hasn't changed.\n\nRe-analyze anyway? (This uses API tokens)`)) {
+                showStatus('Analysis skipped - using cached profile.', 'success');
                 return;
             }
+        }
 
-            if (response && response.success) {
-                showStatus('Profile extracted successfully!', 'success');
-                displayProfile(response.data);
-            } else {
-                showStatus('Error: ' + (response?.error || 'Unknown error'), 'error');
-            }
+        // Proceed with analysis
+        chrome.storage.sync.set({ geminiApiKey: apiKey }, () => {
+            chrome.storage.local.set({ userResume: resume }, () => {
+                // Also save resume to Firebase cloud
+                chrome.runtime.sendMessage({ type: 'saveResumeToCloud', resume });
+
+                // Now analyze
+                showStatus('Analyzing your resume...', 'loading');
+                analyzeButton.disabled = true;
+
+                chrome.runtime.sendMessage({ type: 'analyzeResume' }, (response) => {
+                    analyzeButton.disabled = false;
+
+                    if (chrome.runtime.lastError) {
+                        showStatus('Error: ' + chrome.runtime.lastError.message, 'error');
+                        return;
+                    }
+
+                    if (response && response.success) {
+                        showStatus('Profile extracted and synced to cloud!', 'success');
+                        displayProfile(response.data);
+
+                        // Save the hash of the analyzed resume
+                        chrome.storage.local.set({ lastAnalyzedResumeHash: currentHash });
+
+                        // Save profile to Firebase cloud
+                        chrome.runtime.sendMessage({ type: 'saveProfileToCloud', profile: response.data });
+                    } else {
+                        showStatus('Error: ' + (response?.error || 'Unknown error'), 'error');
+                    }
+                });
+            });
         });
     });
 });
+
+// Simple hash function to detect resume changes
+function simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString();
+}
 
 // Helper to show status messages
 function showStatus(message, type) {
@@ -135,36 +204,13 @@ function displayProfile(profile) {
     document.getElementById('profileIndustries').innerHTML =
         (profile.industries || []).map(i => `<span class="tag tag-industry">${i}</span>`).join('');
 
-    // Work History (experience array with highlights)
-    const experienceHtml = (profile.experience || []).map(exp => `
-        <div class="experience-card">
-            <div class="exp-header">
-                <span class="exp-title">${exp.title || 'Unknown Role'}</span>
-                <span class="exp-years">${exp.years || '?'} years</span>
-            </div>
-            <div class="exp-company">${exp.company || 'Unknown Company'}</div>
-            ${exp.highlights?.length ? `
-                <ul class="exp-highlights">
-                    ${exp.highlights.map(h => `<li>${h}</li>`).join('')}
-                </ul>
-            ` : ''}
-        </div>
-    `).join('');
-    document.getElementById('profileExperience').innerHTML = experienceHtml || '<span style="color: #888;">No experience data</span>';
-
-    // Technical Skills with context (hardSkills as RichSkillSchema)
+    // Technical Skills (skill + years only)
     const hardSkillsHtml = (profile.hardSkills || []).map(s => {
-        // Handle both old format (string) and new format (object with skill, context, years)
+        // Handle both old format (string) and new format (object with skill, years)
         if (typeof s === 'string') {
             return `<span class="tag tag-skill">${s}</span>`;
         }
-        return `
-            <div class="skill-rich">
-                <span class="skill-name">${s.skill}</span>
-                <span class="skill-years">(${s.years}y)</span>
-                ${s.context ? `<span class="skill-context">${s.context}</span>` : ''}
-            </div>
-        `;
+        return `<span class="tag tag-skill">${s.skill} <span style="color: var(--cf-orange); font-size: 10px;">(${s.years}y)</span></span>`;
     }).join('');
     document.getElementById('profileHardSkills').innerHTML = hardSkillsHtml || '<span style="color: #888;">No skills data</span>';
 
@@ -172,41 +218,9 @@ function displayProfile(profile) {
     document.getElementById('profileSoftSkills').innerHTML =
         (profile.softSkills || []).map(s => `<span class="tag tag-skill">${s}</span>`).join('') || '<span style="color: #888;">No soft skills</span>';
 
-    // Top Achievements
-    document.getElementById('profileAchievements').innerHTML =
-        (profile.topAchievements || []).map(a => `<li>${a}</li>`).join('') || '<li style="color: #888;">No achievements data</li>';
-
-    // Target Titles
-    document.getElementById('profileTitles').innerHTML =
-        (profile.targetTitles || []).map(t => `<li>${t}</li>`).join('');
-
-    // Search Queries with copy buttons
-    document.getElementById('profileQueries').innerHTML =
-        (profile.searchQueries || []).map((q, i) => `
-            <li style="display: flex; align-items: center; gap: 8px; margin: 6px 0;">
-                <code style="flex: 1; word-break: break-word;">${q}</code>
-                <button class="copy-query-btn" data-query="${encodeURIComponent(q)}" style="padding: 4px 8px; font-size: 11px; background: #0a66c2; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">Copy</button>
-            </li>
-        `).join('');
-
-    // Add copy button handlers
-    document.querySelectorAll('.copy-query-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const query = decodeURIComponent(e.target.dataset.query);
-            try {
-                await navigator.clipboard.writeText(query);
-                e.target.textContent = 'Copied!';
-                e.target.style.background = '#3d8b6e';
-                setTimeout(() => {
-                    e.target.textContent = 'Copy';
-                    e.target.style.background = '#0a66c2';
-                }, 1500);
-            } catch (err) {
-                e.target.textContent = 'Failed';
-                setTimeout(() => { e.target.textContent = 'Copy'; }, 1500);
-            }
-        });
-    });
+    // Certifications (simple tags)
+    document.getElementById('profileCertifications').innerHTML =
+        (profile.certifications || []).map(c => `<span class="tag tag-cert">${c}</span>`).join('') || '<span style="color: #888;">No certifications</span>';
 }
 
 // --- Hard Filters ---
@@ -366,7 +380,7 @@ function showFirebaseStatus(message, type) {
 // --- Application Auto-Fill ---
 
 const autofillFields = [
-    'authUSA', 'sponsorship', 'yearsExp', 'currentTitle', 'currentCompany',
+    'authUSA', 'sponsorship',
     'fullName', 'email', 'phone', 'linkedIn',
     'city', 'state', 'zipCode', 'willingRelocate',
     'gender', 'ethnicity', 'hispanic', 'veteran', 'disability'

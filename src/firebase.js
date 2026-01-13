@@ -194,4 +194,90 @@ export function isFirebaseReady() {
     return db !== null && currentUserId !== null;
 }
 
+// --- Resume & Profile Cloud Sync ---
+
+// Get user document reference
+function getUserDocRef() {
+    if (!db || !currentUserId) return null;
+    return doc(db, 'users', currentUserId);
+}
+
+// Save resume to Firebase
+export async function saveResumeToFirebase(resume) {
+    const userRef = getUserDocRef();
+    if (!userRef) {
+        console.log('CareerFit: Firebase not available, skipping resume cloud save');
+        return null;
+    }
+
+    try {
+        await setDoc(userRef, {
+            resume: resume,
+            resumeUpdatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log('CareerFit: Resume saved to Firebase');
+        return true;
+    } catch (error) {
+        console.error('CareerFit: Error saving resume to Firebase:', error);
+        return null;
+    }
+}
+
+// Load resume from Firebase
+export async function loadResumeFromFirebase() {
+    const userRef = getUserDocRef();
+    if (!userRef) return null;
+
+    try {
+        const snapshot = await getDoc(userRef);
+        if (snapshot.exists() && snapshot.data().resume) {
+            console.log('CareerFit: Resume loaded from Firebase');
+            return snapshot.data().resume;
+        }
+        return null;
+    } catch (error) {
+        console.error('CareerFit: Error loading resume from Firebase:', error);
+        return null;
+    }
+}
+
+// Save candidate profile to Firebase
+export async function saveProfileToFirebase(profile) {
+    const userRef = getUserDocRef();
+    if (!userRef) {
+        console.log('CareerFit: Firebase not available, skipping profile cloud save');
+        return null;
+    }
+
+    try {
+        await setDoc(userRef, {
+            candidateProfile: profile,
+            profileUpdatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log('CareerFit: Profile saved to Firebase');
+        return true;
+    } catch (error) {
+        console.error('CareerFit: Error saving profile to Firebase:', error);
+        return null;
+    }
+}
+
+// Load candidate profile from Firebase
+export async function loadProfileFromFirebase() {
+    const userRef = getUserDocRef();
+    if (!userRef) return null;
+
+    try {
+        const snapshot = await getDoc(userRef);
+        if (snapshot.exists() && snapshot.data().candidateProfile) {
+            console.log('CareerFit: Profile loaded from Firebase');
+            return snapshot.data().candidateProfile;
+        }
+        return null;
+    } catch (error) {
+        console.error('CareerFit: Error loading profile from Firebase:', error);
+        return null;
+    }
+}
+
 export { db, auth, currentUserId };

@@ -9,7 +9,11 @@ import {
     updateJobInFirebase,
     clearFirebaseHistory,
     syncLocalToFirebase,
-    isFirebaseReady
+    isFirebaseReady,
+    saveResumeToFirebase,
+    loadResumeFromFirebase,
+    saveProfileToFirebase,
+    loadProfileFromFirebase
 } from './firebase.js';
 
 console.log('CareerFit: Background script loading...');
@@ -70,21 +74,64 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    // Handle resume cloud sync
+    if (message.type === 'saveResumeToCloud') {
+        (async () => {
+            await ensureFirebaseInit();
+            const result = await saveResumeToFirebase(message.resume);
+            sendResponse({ success: !!result });
+        })();
+        return true;
+    }
+
+    if (message.type === 'loadResumeFromCloud') {
+        (async () => {
+            await ensureFirebaseInit();
+            const resume = await loadResumeFromFirebase();
+            sendResponse({ success: !!resume, resume });
+        })();
+        return true;
+    }
+
+    // Handle profile cloud sync
+    if (message.type === 'saveProfileToCloud') {
+        (async () => {
+            await ensureFirebaseInit();
+            const result = await saveProfileToFirebase(message.profile);
+            sendResponse({ success: !!result });
+        })();
+        return true;
+    }
+
+    if (message.type === 'loadProfileFromCloud') {
+        (async () => {
+            await ensureFirebaseInit();
+            const profile = await loadProfileFromFirebase();
+            sendResponse({ success: !!profile, profile });
+        })();
+        return true;
+    }
+
     // Handle analyzeResume - uses sendResponse for options page
     if (message.type === 'analyzeResume') {
-        chrome.storage.sync.get(['geminiApiKey', 'userResume'], async (data) => {
-            if (!data.geminiApiKey || !data.userResume) {
-                sendResponse({ success: false, error: 'API Key or Resume not found. Please save them first.' });
-                return;
-            }
+        (async () => {
             try {
-                const profile = await analyzeResume(data.userResume, data.geminiApiKey);
+                // Get API key from sync (small), resume from local (large)
+                const syncData = await chrome.storage.sync.get(['geminiApiKey']);
+                const localData = await chrome.storage.local.get(['userResume']);
+
+                if (!syncData.geminiApiKey || !localData.userResume) {
+                    sendResponse({ success: false, error: 'API Key or Resume not found. Please save them first.' });
+                    return;
+                }
+
+                const profile = await analyzeResume(localData.userResume, syncData.geminiApiKey);
                 sendResponse({ success: true, data: profile });
             } catch (error) {
                 console.error('CareerFit: Error analyzing resume:', error);
                 sendResponse({ success: false, error: error.message });
             }
-        });
+        })();
         return true; // Keep channel open for async response
     }
 
@@ -150,25 +197,20 @@ function formatProfileForMatching(profile) {
         text += '\n';
     }
 
-    // Work history with context
-    if (profile.experience?.length) {
-        text += '\nWORK HISTORY:\n';
-        profile.experience.forEach(exp => {
-            text += `- ${exp.title} at ${exp.company} (${exp.years} years)\n`;
-            if (exp.highlights?.length) {
-                exp.highlights.forEach(h => {
-                    text += `  • ${h}\n`;
-                });
-            }
-        });
+    // Functions and industries
+    if (profile.functions?.length) {
+        text += `FUNCTIONS: ${profile.functions.join(', ')}\n`;
+    }
+    if (profile.industries?.length) {
+        text += `INDUSTRIES: ${profile.industries.join(', ')}\n`;
     }
 
-    // Technical skills with context
+    // Technical skills with years
     if (profile.hardSkills?.length) {
         text += '\nTECHNICAL SKILLS:\n';
         profile.hardSkills.forEach(skill => {
             if (typeof skill === 'object' && skill.skill) {
-                text += `- ${skill.skill} (${skill.years} years): ${skill.context}\n`;
+                text += `- ${skill.skill} (${skill.years} years)\n`;
             } else {
                 // Fallback for old format (just string array)
                 text += `- ${skill}\n`;
@@ -181,25 +223,9 @@ function formatProfileForMatching(profile) {
         text += `\nSOFT SKILLS: ${profile.softSkills.join(', ')}\n`;
     }
 
-    // Top achievements
-    if (profile.topAchievements?.length) {
-        text += '\nTOP ACHIEVEMENTS:\n';
-        profile.topAchievements.forEach(a => {
-            text += `• ${a}\n`;
-        });
-    }
-
     // Certifications
     if (profile.certifications?.length) {
         text += `\nCERTIFICATIONS: ${profile.certifications.join(', ')}\n`;
-    }
-
-    // Functions and industries
-    if (profile.functions?.length) {
-        text += `\nFUNCTIONS: ${profile.functions.join(', ')}\n`;
-    }
-    if (profile.industries?.length) {
-        text += `INDUSTRIES: ${profile.industries.join(', ')}\n`;
     }
 
     return text;
@@ -321,12 +347,13 @@ async function summarizeRole(jobText, apiKey, tabId) {
         const prompt = `Job: ${jobText}
 
 Extract key info:
-- yearsRequired: exact years (e.g., "6+ years")
+- yearsRequired: exact years (e.g., "5+ years", "3-5 years"). Extract the NUMBER only.
 - managerType: "IC" or "People Manager"
 - function: 1 sentence - what does this person DO daily?
-- uniqueRequirements: 4-6 SPECIFIC things this role needs
+- uniqueRequirements: 4-6 SPECIFIC things this role needs (NOT years of experience - that's already in yearsRequired)
 
 GOOD unique requirements (things that filter out most candidates):
+- "Retail/Shopping Ads experience"
 - "Healthcare industry required"
 - "PMP certification required"
 - "Tableau proficiency"
@@ -336,7 +363,8 @@ GOOD unique requirements (things that filter out most candidates):
 - "Spanish fluency required"
 - "AWS/Azure experience"
 
-BAD - NEVER include these generic skills (every PM/manager has them):
+BAD - NEVER include these in uniqueRequirements:
+- Years of experience (already captured in yearsRequired)
 - "Cross-functional collaboration"
 - "Project management"
 - "Stakeholder management"
@@ -420,9 +448,9 @@ async function callGemini(jobHtml, candidateProfile, apiKey, tabId) {
 
         // Schema for gaps (missing PREFERRED qualifications - fixable)
         const gapSchema = z.object({
-            skill_name: z.string().describe('The specific skill gap'),
-            resources: z.string().describe('1-2 learning resources (courses, books, certifications)'),
-            keywords: z.array(z.string()).describe('2-3 keywords to add to resume for this skill')
+            skill_name: z.string().describe('Specific technical skill, tool, certification, or industry experience. NEVER generic skills like "communication", "leadership", "problem-solving".'),
+            resources: z.string().describe('1-2 specific learning resources (course name, certification, book title)'),
+            keywords: z.array(z.string()).describe('2-3 exact keywords to add to resume for ATS matching')
         });
 
         const zodSchema = z.object({
@@ -432,7 +460,7 @@ async function callGemini(jobHtml, candidateProfile, apiKey, tabId) {
             unique_requirements: z.array(z.string()).describe('ONLY requirements that filter 80%+ of candidates: specific tools (ServiceNow, Tableau), certifications (PMP, CPA), industries (healthcare, fintech), degrees, location/visa constraints. NEVER generic skills like "communication", "project management", "cross-functional collaboration", "data analysis", "stakeholder management". Max 6 items.'),
             disqualifiers: z.array(disqualifierSchema).describe('MINIMUM qualifications the candidate does NOT meet. Only include hard requirements from "Minimum Qualifications" section. Empty array if all minimums are met.'),
             fit_score: z.number().min(1).max(5).describe('Fit score 1-5. If disqualifiers exist, score should be 1-2.'),
-            gaps: z.array(gapSchema).describe('PREFERRED qualifications gaps (nice-to-haves the candidate lacks). Not disqualifiers.')
+            gaps: z.array(gapSchema).describe('1-3 SPECIFIC skills from "Preferred" section that candidate lacks. Must be learnable (tools, certifications, industry knowledge). NEVER include: communication, leadership, collaboration, stakeholder management, problem-solving, or other soft skills.')
         });
 
         const rawSchema = zodToJsonSchema(zodSchema);
@@ -456,9 +484,10 @@ async function callGemini(jobHtml, candidateProfile, apiKey, tabId) {
 - If candidate does NOT meet these → add to "disqualifiers" array
 - Examples: "6 years in management consulting", "Bachelor's degree required", "Must have CPA"
 
-**PREFERRED QUALIFICATIONS** (usually labeled "Preferred", "Nice to have", or "Bonus"):
-- If candidate lacks these → add to "gaps" array (these are learnable/fixable)
-- Examples: "Experience with Kubernetes preferred", "MBA is a plus"
+**PREFERRED QUALIFICATIONS → GAPS** (usually labeled "Preferred", "Nice to have", or "Bonus"):
+- If candidate lacks these → add to "gaps" array (max 3)
+- ONLY include SPECIFIC, LEARNABLE skills: tools (Kubernetes, Tableau), certifications (AWS, PMP), industry experience (healthcare, fintech)
+- NEVER include soft skills: communication, leadership, collaboration, stakeholder management, problem-solving, analytical thinking
 
 **Scoring Rules:**
 - If ANY disqualifier exists → fit_score MUST be 1 or 2
@@ -569,14 +598,12 @@ ${jobHtml}`;
 async function analyzeResume(resumeText, apiKey) {
     const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
 
-    const prompt = `You are a career coach analyzing a resume to create a RICH profile for job matching.
+    const prompt = `You are a career coach analyzing a resume to create a profile for job matching.
 
 RESUME:
 ${resumeText}
 
-IMPORTANT: Extract DETAILED information with context. This profile will be used to match against job postings, so include specifics like scale, metrics, and impact.
-
-Extract the following:
+Extract the following for accurate job matching:
 
 1. yearsExperience: Total years (e.g., "7", "5-7"). Calculate from earliest job to present.
 
@@ -587,40 +614,25 @@ Extract the following:
    - field: Major/concentration
    - schools: Array with degrees (e.g., ["Kelley School of Business (MBA)", "Virginia Tech (BS)"])
 
-4. experience: Array of up to 4 most recent roles, each with:
-   - title: Job title
-   - company: Company name
-   - years: Years in role
-   - highlights: 2-3 KEY achievements WITH METRICS (e.g., "Led team of 8 engineers", "Reduced costs by 40%", "Launched product to 10M users")
+4. functions: Types of work (e.g., ["Product Management", "Operations"])
 
-5. functions: Types of work (e.g., ["Product Management", "Operations"])
+5. industries: Industries worked in (e.g., ["CPG", "Tech", "FinTech"])
 
-6. industries: Industries (e.g., ["CPG", "Tech", "FinTech"])
-
-7. hardSkills: Array of technical skills WITH CONTEXT, each with:
-   - skill: The skill name (e.g., "SQL", "Python", "Agile")
-   - context: How they used it with scale/impact (e.g., "Built ETL pipelines processing 10M records daily", "Led Agile transformation for 50-person team")
+6. hardSkills: Array of ALL technical skills found in resume, each with:
+   - skill: The skill name (e.g., "SQL", "Python", "Agile", "ServiceNow", "ITIL", "Tableau", "SAP")
    - years: Years of experience with this skill
-   Include 8-12 most relevant technical skills.
+   IMPORTANT: Include EVERY technical skill mentioned. No limit - be thorough as these are used for job matching.
 
-8. softSkills: Leadership skills (e.g., ["Cross-functional leadership", "Executive communication"])
+7. softSkills: Leadership skills (e.g., ["Cross-functional leadership", "Executive communication"])
 
-9. certifications: Any certifications (e.g., ["PMP", "AWS Solutions Architect"])
+8. certifications: ALL certifications found in resume (e.g., ["PMP", "AWS Solutions Architect", "ITIL", "Six Sigma", "Google Analytics"]). Include every certification mentioned.
 
-10. topAchievements: 3-5 MOST IMPRESSIVE resume bullets with metrics. These should be the standout accomplishments (e.g., "Grew revenue from $2M to $8M in 18 months", "Reduced customer churn by 35%")
-
-11. targetTitles: 8-12 job titles to search for (include current level AND junior roles)
-
-12. searchQueries: 3-5 Boolean search strings
-
-13. keywords: 10-15 keywords for matching jobs
-
-14. hardFilters:
+9. hardFilters:
     - maxYearsRequired: Their years + 2
     - excludeTitles: Too senior (e.g., ["VP", "Chief", "Director"])
     - excludeRequirements: Can't meet (e.g., ["PhD", "CPA"])
 
-Be SPECIFIC. Include numbers, scales, and impact metrics wherever found in the resume.`;
+Be thorough with skills - list every technical tool, methodology, and platform found in the resume.`;
 
     const schemaJson = getJsonSchema(CandidateProfileSchema);
 
@@ -645,9 +657,15 @@ Be SPECIFIC. Include numbers, scales, and impact metrics wherever found in the r
 
     profile.analyzedAt = new Date().toISOString();
 
-    // Save to local storage
-    await chrome.storage.local.set({ candidateProfile: profile });
-    console.log('CareerFit: Candidate profile saved:', profile);
+    // Save to sync storage (syncs across devices)
+    try {
+        await chrome.storage.sync.set({ candidateProfile: profile });
+        console.log('CareerFit: Candidate profile saved to sync storage');
+    } catch (syncError) {
+        // If sync fails (e.g., quota exceeded), fall back to local
+        console.warn('CareerFit: Sync storage failed, using local:', syncError.message);
+        await chrome.storage.local.set({ candidateProfile: profile });
+    }
 
     return profile;
 }

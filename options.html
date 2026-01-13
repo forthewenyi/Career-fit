@@ -55,88 +55,7 @@
         .tag { display: inline-block; background: var(--cf-creamy-white); color: var(--cf-text-green); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin: 2px; border: 1px solid #e0ddd0; }
         .tag-skill { background: #e8f5f1; color: var(--cf-text-green); border-color: #d0e8e0; }
         .tag-industry { background: #f5f0e0; color: #6b5a30; border-color: #e8e0d0; }
-
-        /* Experience cards */
-        .experience-card {
-            background: #fdfcf8;
-            border: 1px solid #e0ddd0;
-            border-left: 3px solid var(--cf-calming-green);
-            border-radius: 5px;
-            padding: 10px;
-            margin: 6px 0;
-        }
-        .experience-card .exp-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-        }
-        .experience-card .exp-title {
-            font-weight: 600;
-            color: #222;
-            font-size: 12px;
-        }
-        .experience-card .exp-years {
-            color: var(--cf-dark-green);
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .experience-card .exp-company {
-            color: var(--cf-text-green);
-            font-size: 11px;
-            margin-bottom: 4px;
-        }
-        .experience-card .exp-highlights {
-            margin: 0;
-            padding-left: 16px;
-            font-size: 11px;
-            color: #555;
-        }
-        .experience-card .exp-highlights li {
-            margin: 2px 0;
-        }
-
-        /* Rich skill tags */
-        .skill-rich {
-            background: #fdfcf8;
-            border: 1px solid #e0ddd0;
-            border-radius: 5px;
-            padding: 6px 10px;
-            margin: 3px;
-            display: inline-block;
-        }
-        .skill-rich .skill-name {
-            font-weight: 600;
-            color: var(--cf-dark-green);
-            font-size: 11px;
-        }
-        .skill-rich .skill-years {
-            color: var(--cf-orange);
-            font-size: 10px;
-            margin-left: 4px;
-            font-weight: 600;
-        }
-        .skill-rich .skill-context {
-            display: block;
-            font-size: 10px;
-            color: #666;
-            margin-top: 2px;
-        }
-
-        /* Achievement list */
-        .achievement-list {
-            list-style: none;
-            padding: 0;
-            margin: 6px 0;
-        }
-        .achievement-list li {
-            background: #fdfcf8;
-            border-left: 3px solid var(--cf-healing-yellow);
-            padding: 6px 10px;
-            margin: 4px 0;
-            font-size: 11px;
-            border-radius: 0 5px 5px 0;
-            color: #333;
-        }
+        .tag-cert { background: #fff8e7; color: #6b5a30; border-color: #f0d58c; }
 
         /* Hard Filters Section */
         #filtersSection {
@@ -289,11 +208,6 @@
         </div>
 
         <div class="profile-section">
-            <span class="profile-label">Work History:</span>
-            <div id="profileExperience"></div>
-        </div>
-
-        <div class="profile-section">
             <span class="profile-label">Technical Skills:</span>
             <div id="profileHardSkills"></div>
         </div>
@@ -304,18 +218,8 @@
         </div>
 
         <div class="profile-section">
-            <span class="profile-label">Top Achievements:</span>
-            <ul id="profileAchievements" class="achievement-list"></ul>
-        </div>
-
-        <div class="profile-section">
-            <span class="profile-label">Target Job Titles:</span>
-            <ul id="profileTitles"></ul>
-        </div>
-
-        <div class="profile-section">
-            <span class="profile-label">Search Queries (copy these for job boards):</span>
-            <ul id="profileQueries"></ul>
+            <span class="profile-label">Certifications:</span>
+            <div id="profileCertifications"></div>
         </div>
     </div>
 
@@ -377,22 +281,6 @@
                     <option value="yes">Yes</option>
                     <option value="no">No</option>
                 </select>
-            </div>
-        </div>
-
-        <div class="autofill-group">
-            <label class="autofill-label">Experience</label>
-            <div class="filter-row">
-                <label for="yearsExp">Years of experience:</label>
-                <input type="number" id="yearsExp" min="0" max="50" style="width: 60px;">
-            </div>
-            <div class="filter-row">
-                <label for="currentTitle">Current job title:</label>
-                <input type="text" id="currentTitle" placeholder="e.g., Product Manager" style="flex: 1;">
-            </div>
-            <div class="filter-row">
-                <label for="currentCompany">Current company:</label>
-                <input type="text" id="currentCompany" placeholder="e.g., Google" style="flex: 1;">
             </div>
         </div>
 

@@ -30,33 +30,33 @@ CareerFit AI analyzes job postings against your resume in seconds, giving you:
 
 ### One-Time Setup
 1. Paste your resume in Options
-2. Click "Analyze My Resume" - AI extracts a rich profile with:
-   - Work history with achievements and metrics
-   - Skills with context (e.g., "SQL - Built pipelines for 10M users")
-   - Top accomplishments for matching
+2. Click "Analyze My Resume" - AI extracts a structured profile with:
+   - Years of experience and seniority level
+   - Technical skills with years (all skills found)
+   - Certifications, functions, industries
 
 ### On Any Job Page
 - **Summarize** - Quick role overview (no API cost)
 - **Assess** - Deep fit analysis against your profile
 
 ### Profile-Based Matching
-Your resume is converted to structured tags with context:
+Your resume is converted to structured data for job matching:
 ```
 EXPERIENCE: 7 years | Level: Senior
-WORK HISTORY:
-- Senior PM at Google (3 years)
-  • Led team of 8 engineers
-  • Launched product to 10M users
+EDUCATION: MBA in Business (Kelley School)
+FUNCTIONS: Product Management, Strategy
+INDUSTRIES: Tech, E-commerce
 
 TECHNICAL SKILLS:
-- SQL (3 years): Built data pipelines serving 10M users
-- Python (2 years): ML models for fraud detection
+- SQL (5 years)
+- Python (3 years)
+- Tableau (4 years)
+- Agile (6 years)
 
-TOP ACHIEVEMENTS:
-• Grew revenue from $2M to $8M in 18 months
+CERTIFICATIONS: PMP, AWS Solutions Architect
 ```
 
-This gives faster responses while maintaining accuracy.
+This compact format enables fast, accurate matching against job requirements.
 
 ## Supported Sites
 

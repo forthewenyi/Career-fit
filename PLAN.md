@@ -31,8 +31,8 @@ ON ANY JOB PAGE:
 ```
 
 ### Storage
-- **chrome.storage.sync** (100KB): API key, resume text, Firebase config
-- **chrome.storage.local** (5MB): candidate profile, autofill answers, job history (500 job limit), skills to learn (100 limit)
+- **chrome.storage.sync** (100KB): API key, candidate profile, Firebase config
+- **chrome.storage.local** (5MB): resume text, autofill answers, job history (500 job limit), skills to learn (100 limit)
 
 ### Supported Sites
 - LinkedIn Jobs

@@ -26,8 +26,8 @@ User clicks button → content.js sends message → background.js calls Gemini �
 ```
 
 **Storage:**
-- `chrome.storage.sync` (100KB): API key, resume text, Firebase config
-- `chrome.storage.local` (5MB): candidate profile, autofill answers, job history (500 job limit), skills to learn (100 limit)
+- `chrome.storage.sync` (100KB): API key, candidate profile, Firebase config
+- `chrome.storage.local` (5MB): resume text, autofill answers, job history (500 job limit), skills to learn (100 limit)
 
 ## Database Schema
 
@@ -62,7 +62,7 @@ User clicks button → content.js sends message → background.js calls Gemini �
 }
 ```
 
-**candidateProfile:** See `CandidateProfileSchema` in schemas.js - includes experience[], hardSkills[] with context, topAchievements[], targetTitles[], hardFilters{}
+**candidateProfile:** See `CandidateProfileSchema` in schemas.js - includes yearsExperience, seniorityLevel, education{}, functions[], industries[], hardSkills[] with years, softSkills[], certifications[], hardFilters{}
 
 **autofillAnswers:** Work auth (authUSA, sponsorship), personal (fullName, email, phone, linkedIn), location (city, state, zipCode), diversity (gender, veteran, disability)
 
