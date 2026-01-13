@@ -1,26 +1,18 @@
-# CareerFit v2: Job Scanner
+# CareerFit AI
 
 ## Current Status
 
-| Phase | Status |
-|-------|--------|
-| Phase 1: Resume Profile Extraction | ✅ DONE |
-| Phase 2: Hard Filter Configuration | ✅ DONE |
-| Phase 3: Batch Job Scanner | ✅ DONE |
-| Phase 4: Quick Filter | ✅ DONE |
-| Phase 5: Full AI Scoring | ✅ DONE |
-| Phase 6: Apply Workflow | ✅ DONE |
-| Phase 7: Smarter Fit Scoring | ✅ DONE |
+**All core features complete!** The extension can:
 
-**Phases 1-7 complete!** The extension can:
 1. Analyze resumes and extract structured candidate profiles
 2. Configure hard filters (Director+, PhD, companies, etc.)
-3. Scan job search pages (LinkedIn, Indeed, Interstride, Greenhouse, Lever)
-4. Quick filter jobs without API calls
-5. Score remaining jobs with Gemini AI and display ranked results
-6. Track job history with status updates (Applied, Interview, etc.)
-7. Match resume bullets to specific jobs with AI analysis
-8. Distinguish minimum vs preferred qualifications with disqualifier warnings
+3. Summarize jobs (years, IC/Manager, unique requirements)
+4. Assess job fit with AI scoring (1-5), gaps, disqualifiers
+5. Track job history with status updates (Scanned, Interested, Applied)
+6. Match resume bullets to specific jobs with AI analysis
+7. Auto-fill common application questions on Workday, Greenhouse, Lever
+8. Track skills to learn from job gaps, mark skills as learned
+9. View history with 5-tab interface: All Jobs, Interested, Applied, To Learn, Learned
 
 ---
 
@@ -29,28 +21,32 @@
 ### User Flow
 ```
 ONE TIME SETUP:
-  Resume → Gemini extracts profile → Define hard filters
+  Resume → Gemini extracts profile → (Optional) Define hard filters
 
-ON-DEMAND:
-  Job search page → Click "Scan Jobs" → Quick filter → AI scoring → Ranked results
+ON ANY JOB PAGE:
+  Click Summarize → Quick role overview
+  Click Assess → Full fit analysis with score, gaps, disqualifiers
+  Click Auto-fill → Fill application form fields
+  Click History → View/manage job history
 ```
 
 ### Storage
-- **chrome.storage.sync** (100KB): API key, resume text
-- **chrome.storage.local** (5MB): candidate profile, filters, job history (500 job limit)
+- **chrome.storage.sync** (100KB): API key, resume text, Firebase config
+- **chrome.storage.local** (5MB): candidate profile, autofill answers, job history (500 job limit), skills to learn (100 limit)
 
 ### Supported Sites
-- LinkedIn (`/jobs/search`, `/jobs/collections`)
-- Indeed (`/jobs`, `q=`)
-- Interstride (`/jobs`)
-- Greenhouse (job boards)
-- Lever (job boards)
+- LinkedIn Jobs
+- Indeed
+- Interstride
+- Greenhouse job boards
+- Lever job boards
+- Auto-fill on Workday, Greenhouse, Lever
 
 ---
 
 ## Future Phases
 
-### Phase 8: Resume Tailor (NOT STARTED)
+### Phase 9: Resume Tailor (NOT STARTED)
 
 **Goal:** Tell user what to UPDATE on their resume - missing keywords, bullet rewrites, skills to add.
 
@@ -65,7 +61,7 @@ ON-DEMAND:
 }
 ```
 
-### Phase 9: Interview Prep (NOT STARTED)
+### Phase 10: Interview Prep (NOT STARTED)
 
 **Goal:** Generate study content when user marks job as "Applied".
 
@@ -78,6 +74,5 @@ ON-DEMAND:
 ## Known Risks
 
 1. **Site changes break selectors** - Job sites update HTML frequently
-2. **Rate limiting** - Scoring many jobs may hit API limits
-3. **Bot detection** - Mitigated by 4-12s delays between jobs
-4. **Storage limits** - 5MB limit, ~1MB current usage with 500 jobs
+2. **Rate limiting** - Many API calls may hit limits
+3. **Storage limits** - 5MB limit, ~1MB current usage with 500 jobs

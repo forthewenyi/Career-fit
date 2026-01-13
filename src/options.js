@@ -135,10 +135,46 @@ function displayProfile(profile) {
     document.getElementById('profileIndustries').innerHTML =
         (profile.industries || []).map(i => `<span class="tag tag-industry">${i}</span>`).join('');
 
-    // Skills (hard + soft combined)
-    const allSkills = [...(profile.hardSkills || []), ...(profile.softSkills || [])];
-    document.getElementById('profileSkills').innerHTML =
-        allSkills.map(s => `<span class="tag tag-skill">${s}</span>`).join('');
+    // Work History (experience array with highlights)
+    const experienceHtml = (profile.experience || []).map(exp => `
+        <div class="experience-card">
+            <div class="exp-header">
+                <span class="exp-title">${exp.title || 'Unknown Role'}</span>
+                <span class="exp-years">${exp.years || '?'} years</span>
+            </div>
+            <div class="exp-company">${exp.company || 'Unknown Company'}</div>
+            ${exp.highlights?.length ? `
+                <ul class="exp-highlights">
+                    ${exp.highlights.map(h => `<li>${h}</li>`).join('')}
+                </ul>
+            ` : ''}
+        </div>
+    `).join('');
+    document.getElementById('profileExperience').innerHTML = experienceHtml || '<span style="color: #888;">No experience data</span>';
+
+    // Technical Skills with context (hardSkills as RichSkillSchema)
+    const hardSkillsHtml = (profile.hardSkills || []).map(s => {
+        // Handle both old format (string) and new format (object with skill, context, years)
+        if (typeof s === 'string') {
+            return `<span class="tag tag-skill">${s}</span>`;
+        }
+        return `
+            <div class="skill-rich">
+                <span class="skill-name">${s.skill}</span>
+                <span class="skill-years">(${s.years}y)</span>
+                ${s.context ? `<span class="skill-context">${s.context}</span>` : ''}
+            </div>
+        `;
+    }).join('');
+    document.getElementById('profileHardSkills').innerHTML = hardSkillsHtml || '<span style="color: #888;">No skills data</span>';
+
+    // Soft Skills (simple tags)
+    document.getElementById('profileSoftSkills').innerHTML =
+        (profile.softSkills || []).map(s => `<span class="tag tag-skill">${s}</span>`).join('') || '<span style="color: #888;">No soft skills</span>';
+
+    // Top Achievements
+    document.getElementById('profileAchievements').innerHTML =
+        (profile.topAchievements || []).map(a => `<li>${a}</li>`).join('') || '<li style="color: #888;">No achievements data</li>';
 
     // Target Titles
     document.getElementById('profileTitles').innerHTML =
@@ -160,7 +196,7 @@ function displayProfile(profile) {
             try {
                 await navigator.clipboard.writeText(query);
                 e.target.textContent = 'Copied!';
-                e.target.style.background = '#4caf50';
+                e.target.style.background = '#3d8b6e';
                 setTimeout(() => {
                     e.target.textContent = 'Copy';
                     e.target.style.background = '#0a66c2';
@@ -195,7 +231,7 @@ saveFiltersBtn.addEventListener('click', () => {
     chrome.storage.local.set({ hardFilters }, () => {
         const filterStatus = document.getElementById('filterStatus');
         filterStatus.textContent = 'Filters saved!';
-        filterStatus.style.color = '#4caf50';
+        filterStatus.style.color = '#3d8b6e';
         setTimeout(() => { filterStatus.textContent = ''; }, 3000);
     });
 });
@@ -315,7 +351,7 @@ syncToCloudBtn.addEventListener('click', async () => {
 function showFirebaseStatus(message, type) {
     firebaseStatusMsg.textContent = message;
     if (type === 'success') {
-        firebaseStatusMsg.style.color = '#4caf50';
+        firebaseStatusMsg.style.color = '#3d8b6e';
     } else if (type === 'error') {
         firebaseStatusMsg.style.color = '#f44336';
     } else {
@@ -326,3 +362,50 @@ function showFirebaseStatus(message, type) {
         setTimeout(() => { firebaseStatusMsg.textContent = ''; }, 5000);
     }
 }
+
+// --- Application Auto-Fill ---
+
+const autofillFields = [
+    'authUSA', 'sponsorship', 'yearsExp', 'currentTitle', 'currentCompany',
+    'fullName', 'email', 'phone', 'linkedIn',
+    'city', 'state', 'zipCode', 'willingRelocate',
+    'gender', 'ethnicity', 'hispanic', 'veteran', 'disability'
+];
+
+// Load autofill data on page load
+document.addEventListener('DOMContentLoaded', () => {
+    chrome.storage.local.get(['autofillAnswers'], (data) => {
+        if (data.autofillAnswers) {
+            loadAutofillAnswers(data.autofillAnswers);
+        }
+    });
+});
+
+function loadAutofillAnswers(answers) {
+    for (const field of autofillFields) {
+        const el = document.getElementById(field);
+        if (el && answers[field] !== undefined) {
+            el.value = answers[field];
+        }
+    }
+}
+
+// Save autofill data
+const saveAutofillBtn = document.getElementById('saveAutofillBtn');
+const autofillStatus = document.getElementById('autofillStatus');
+
+saveAutofillBtn.addEventListener('click', () => {
+    const autofillAnswers = {};
+    for (const field of autofillFields) {
+        const el = document.getElementById(field);
+        if (el) {
+            autofillAnswers[field] = el.value;
+        }
+    }
+
+    chrome.storage.local.set({ autofillAnswers }, () => {
+        autofillStatus.textContent = 'Auto-fill answers saved!';
+        autofillStatus.style.color = '#3d8b6e';
+        setTimeout(() => { autofillStatus.textContent = ''; }, 3000);
+    });
+});

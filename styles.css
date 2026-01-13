@@ -1,23 +1,165 @@
+/* ============================================
+   CareerFit Design System
+   12px base font, 11px labels, 38px score badge
+   ============================================ */
+
+/* Color Variables */
+:root {
+    --cf-healing-yellow: #F0D58C;
+    --cf-calming-green: #9DC3B5;
+    --cf-creamy-white: #F5F3E7;
+    --cf-dark-green: #3d8b6e;
+}
+
 #assess-modal {
     position: fixed;
     top: 20px;
     right: 20px;
-    width: 340px;
+    width: 320px;
     max-height: 80vh;
     z-index: 9999;
     background: white;
     border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    padding: 12px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
+    font-size: 12px;
+    line-height: 1.35;
 }
 
 #assess-modal-content {
     max-height: 400px;
     overflow-y: auto;
 }
+
+/* Score Badge */
+.cf-score-badge {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.cf-score-badge span {
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+}
+.cf-score-green { background: var(--cf-dark-green); }
+.cf-score-orange { background: #c9a050; }
+.cf-score-red { background: #4a4a4a; }
+
+/* Tags */
+.cf-tag {
+    background: var(--cf-creamy-white);
+    color: #2d6b52;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+    margin: 1px;
+    border: 1px solid #e0ddd0;
+}
+.cf-tag-ic { background: #e8f5f1; color: #2d6b52; border-color: #d0e8e0; }
+.cf-tag-manager { background: #f5f0e0; color: #6b5a30; border-color: #e8e0d0; }
+
+/* Gap Cards */
+.cf-gap-card {
+    background: #fdfcf8;
+    border-radius: 5px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    border-left: 3px solid var(--cf-healing-yellow);
+}
+.cf-gap-title { font-size: 12px; font-weight: 600; color: #333; }
+.cf-gap-resources { font-size: 12px; color: #555; margin-top: 1px; }
+
+/* Section Labels */
+.cf-section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #2d6b52;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+/* Cached Banner */
+.cf-cached-banner {
+    background: var(--cf-creamy-white);
+    padding: 4px 8px;
+    border-radius: 5px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #2d6b52;
+    border: 1px solid #e0ddd0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.cf-refresh-btn {
+    background: var(--cf-dark-green);
+    color: white;
+    border: none;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+}
+.cf-refresh-btn:hover { background: #2d6b52; }
+
+/* History Items */
+.cf-history-item {
+    background: #fdfcf8;
+    border-radius: 5px;
+    padding: 8px;
+    margin-bottom: 4px;
+    border-left: 3px solid var(--cf-calming-green);
+}
+.cf-history-title { font-weight: 600; color: #222; font-size: 13px; }
+.cf-history-company { font-size: 12px; color: #222; }
+.cf-history-score { font-size: 16px; font-weight: 700; margin-right: 8px; }
+.cf-history-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+
+/* Status Tags */
+.cf-status-tag {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    background: #e8f5f1;
+    color: #2d6b52;
+    font-weight: 500;
+}
+
+/* Score Section */
+.cf-score-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+.cf-score-label { font-size: 11px; text-transform: uppercase; color: #222; }
+.cf-score-text { font-size: 14px; font-weight: 600; color: var(--cf-dark-green); }
+
+/* Tags Row */
+.cf-tags-row { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 3px; }
+
+/* Role Description */
+.cf-role-desc { margin: 3px 0 0 0; font-size: 12px; color: #444; line-height: 1.35; }
+
+/* Requirements List */
+.cf-requirements-list { font-size: 12px; margin: 0; padding-left: 16px; }
+.cf-requirements-list li { margin-bottom: 2px; color: #333; }
+
+/* Gaps Section */
+.cf-gaps-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; }
 
 /* Button container */
 #careerfit-buttons {
@@ -76,42 +218,39 @@
     color: #333;
 }
 
+/* 2025 Trend: Creamy White with Calming Green text */
 #summarize-btn {
-    background-color: #0a66c2;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 20px;
+    background-color: #F5F3E7;
+    color: #5a9a88;
+    border: 1px solid #e8e6da;
+    padding: 6px 12px;
+    border-radius: 16px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(10,102,194,0.3);
-    font-size: 13px;
+    box-shadow: none;
+    font-size: 12px;
     font-weight: 600;
     transition: all 0.2s ease;
 }
 
 #summarize-btn:hover {
-    background-color: #0856a3;
-    box-shadow: 0 6px 16px rgba(10,102,194,0.4);
-    transform: translateY(-1px);
+    background-color: #ebe9dd;
 }
 
 #assess-btn {
-    background-color: #666;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 20px;
+    background-color: #F5F3E7;
+    color: #5a9a88;
+    border: 1px solid #e8e6da;
+    padding: 6px 12px;
+    border-radius: 16px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    font-size: 13px;
+    box-shadow: none;
+    font-size: 12px;
     font-weight: 600;
     transition: all 0.2s ease;
 }
 
 #assess-btn:hover {
-    background-color: #555;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.3);
-    transform: translateY(-1px);
+    background-color: #ebe9dd;
 }
 
 /* Loading Spinner */
@@ -130,31 +269,28 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Scan Jobs Button (Phase 3) */
-#scan-jobs-btn {
-    background-color: #4caf50;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 20px;
+/* Common action button styles - Creamy White theme */
+.cf-action-btn {
+    background-color: #F5F3E7;
+    color: #5a9a88;
+    border: 1px solid #e8e6da;
+    padding: 6px 12px;
+    border-radius: 16px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(76,175,80,0.3);
-    font-size: 13px;
+    box-shadow: none;
+    font-size: 12px;
     font-weight: 600;
     transition: all 0.2s ease;
 }
 
-#scan-jobs-btn:hover {
-    background-color: #43a047;
-    box-shadow: 0 6px 16px rgba(76,175,80,0.4);
-    transform: translateY(-1px);
+.cf-action-btn:hover {
+    background-color: #ebe9dd;
 }
 
-#scan-jobs-btn:disabled {
-    background-color: #ccc;
+.cf-action-btn:disabled {
+    background-color: #e8e6da !important;
+    color: #aaa !important;
     cursor: not-allowed;
-    box-shadow: none;
-    transform: none;
 }
 
 /* Modal content scrollbar styling */

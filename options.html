@@ -3,104 +3,246 @@
 <head>
     <title>CareerFit AI Settings</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; width: 550px; }
-        h2 { margin-top: 0; color: #333; }
-        h3 { margin-top: 25px; margin-bottom: 10px; color: #444; border-bottom: 1px solid #eee; padding-bottom: 8px; }
-        label { font-weight: 600; display: block; margin-top: 15px; color: #555; }
-        textarea, input[type="text"], input[type="password"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        /* Option B: Green + Cream Hybrid Theme */
+        :root {
+            --cf-healing-yellow: #F0D58C;
+            --cf-calming-green: #9DC3B5;
+            --cf-creamy-white: #F5F3E7;
+            --cf-dark-green: #3d8b6e;
+            --cf-text-green: #2d6b52;
+            --cf-orange: #c9a050;
+            --cf-grey: #4a4a4a;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; width: 550px; font-size: 13px; line-height: 1.4; background: #fdfcf8; }
+        h2 { margin-top: 0; color: var(--cf-dark-green); font-size: 20px; }
+        h3 { margin-top: 25px; margin-bottom: 10px; color: var(--cf-text-green); border-bottom: 1px solid #e0ddd0; padding-bottom: 8px; font-size: 14px; }
+        label { font-weight: 600; display: block; margin-top: 15px; color: #444; font-size: 12px; }
+        textarea, input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="url"], input[type="number"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 13px; background: white; }
         textarea { height: 200px; }
-        textarea:focus, input:focus { outline: none; border-color: #0a66c2; box-shadow: 0 0 0 2px rgba(10,102,194,0.1); }
-        button { padding: 10px 20px; margin-top: 15px; cursor: pointer; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; transition: all 0.2s; }
-        #saveBtn { background: #0a66c2; color: white; }
-        #saveBtn:hover { background: #0856a3; }
-        #analyzeResumeBtn { background: #4caf50; color: white; margin-left: 10px; }
-        #analyzeResumeBtn:hover { background: #43a047; }
-        #analyzeResumeBtn:disabled { background: #ccc; cursor: not-allowed; }
-        #status { margin-top: 15px; font-weight: bold; }
-        .status-success { color: #4caf50; }
-        .status-error { color: #f44336; }
-        .status-loading { color: #ff9800; }
+        textarea:focus, input:focus, select:focus { outline: none; border-color: var(--cf-dark-green); box-shadow: 0 0 0 2px rgba(61,139,110,0.15); }
+        select { padding: 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 12px; background: white; }
+        button { padding: 10px 20px; margin-top: 15px; cursor: pointer; border: none; border-radius: 16px; font-size: 12px; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        button:hover { transform: translateY(-1px); }
+        #saveBtn { background: var(--cf-dark-green); color: white; }
+        #saveBtn:hover { background: #2d6b52; box-shadow: 0 4px 12px rgba(61,139,110,0.3); }
+        #analyzeResumeBtn { background: var(--cf-creamy-white); color: var(--cf-text-green); border: 1px solid #e0ddd0; margin-left: 10px; }
+        #analyzeResumeBtn:hover { background: #ebe9dd; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        #analyzeResumeBtn:disabled { background: #e8e6da; color: #aaa; cursor: not-allowed; box-shadow: none; transform: none; }
+        #status { margin-top: 15px; font-weight: 600; font-size: 12px; }
+        .status-success { color: var(--cf-dark-green); }
+        .status-error { color: #c62828; }
+        .status-loading { color: var(--cf-orange); }
 
         /* Profile Display */
         #profileDisplay {
             display: none;
             margin-top: 20px;
-            padding: 20px;
-            background: #f8f9fa;
+            padding: 16px;
+            background: white;
             border-radius: 8px;
-            border: 1px solid #e9ecef;
+            border: 1px solid #e0ddd0;
         }
-        #profileDisplay h3 { margin-top: 0; border: none; padding: 0; }
-        #profileDisplay p { margin: 8px 0; line-height: 1.5; }
-        #profileDisplay ul { margin: 5px 0 15px 0; padding-left: 20px; }
-        #profileDisplay li { margin: 4px 0; }
-        #profileDisplay code { background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-        .profile-section { margin-bottom: 15px; }
-        .profile-label { font-weight: 600; color: #333; }
-        .profile-value { color: #666; }
-        .tag { display: inline-block; background: #e3f2fd; color: #1976d2; padding: 3px 8px; border-radius: 12px; font-size: 12px; margin: 2px; }
-        .tag-skill { background: #e8f5e9; color: #388e3c; }
-        .tag-industry { background: #fff3e0; color: #f57c00; }
+        #profileDisplay h3 { margin-top: 0; border: none; padding: 0; color: var(--cf-dark-green); }
+        #profileDisplay p { margin: 6px 0; line-height: 1.4; font-size: 12px; }
+        #profileDisplay ul { margin: 5px 0 12px 0; padding-left: 18px; }
+        #profileDisplay li { margin: 3px 0; font-size: 12px; }
+        #profileDisplay code { background: var(--cf-creamy-white); padding: 2px 6px; border-radius: 4px; font-size: 11px; color: var(--cf-text-green); }
+        .profile-section { margin-bottom: 12px; }
+        .profile-label { font-weight: 600; color: var(--cf-text-green); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .profile-value { color: #555; font-size: 12px; }
+        .tag { display: inline-block; background: var(--cf-creamy-white); color: var(--cf-text-green); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin: 2px; border: 1px solid #e0ddd0; }
+        .tag-skill { background: #e8f5f1; color: var(--cf-text-green); border-color: #d0e8e0; }
+        .tag-industry { background: #f5f0e0; color: #6b5a30; border-color: #e8e0d0; }
+
+        /* Experience cards */
+        .experience-card {
+            background: #fdfcf8;
+            border: 1px solid #e0ddd0;
+            border-left: 3px solid var(--cf-calming-green);
+            border-radius: 5px;
+            padding: 10px;
+            margin: 6px 0;
+        }
+        .experience-card .exp-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .experience-card .exp-title {
+            font-weight: 600;
+            color: #222;
+            font-size: 12px;
+        }
+        .experience-card .exp-years {
+            color: var(--cf-dark-green);
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .experience-card .exp-company {
+            color: var(--cf-text-green);
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .experience-card .exp-highlights {
+            margin: 0;
+            padding-left: 16px;
+            font-size: 11px;
+            color: #555;
+        }
+        .experience-card .exp-highlights li {
+            margin: 2px 0;
+        }
+
+        /* Rich skill tags */
+        .skill-rich {
+            background: #fdfcf8;
+            border: 1px solid #e0ddd0;
+            border-radius: 5px;
+            padding: 6px 10px;
+            margin: 3px;
+            display: inline-block;
+        }
+        .skill-rich .skill-name {
+            font-weight: 600;
+            color: var(--cf-dark-green);
+            font-size: 11px;
+        }
+        .skill-rich .skill-years {
+            color: var(--cf-orange);
+            font-size: 10px;
+            margin-left: 4px;
+            font-weight: 600;
+        }
+        .skill-rich .skill-context {
+            display: block;
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* Achievement list */
+        .achievement-list {
+            list-style: none;
+            padding: 0;
+            margin: 6px 0;
+        }
+        .achievement-list li {
+            background: #fdfcf8;
+            border-left: 3px solid var(--cf-healing-yellow);
+            padding: 6px 10px;
+            margin: 4px 0;
+            font-size: 11px;
+            border-radius: 0 5px 5px 0;
+            color: #333;
+        }
 
         /* Hard Filters Section */
         #filtersSection {
-            margin-top: 30px;
-            padding: 20px;
-            background: #fff;
-            border: 1px solid #ddd;
+            margin-top: 25px;
+            padding: 16px;
+            background: white;
+            border: 1px solid #e0ddd0;
             border-radius: 8px;
         }
-        #filtersSection h3 { margin-top: 0; }
+        #filtersSection h3 { margin-top: 0; color: var(--cf-orange); }
         .filter-row {
             display: flex;
             align-items: center;
-            margin: 12px 0;
+            margin: 10px 0;
             gap: 8px;
+            font-size: 12px;
         }
         .filter-row label {
             display: inline;
             margin: 0;
             font-weight: normal;
+            font-size: 12px;
         }
         .filter-row input[type="checkbox"] {
             width: auto;
             margin: 0;
+            accent-color: var(--cf-dark-green);
         }
         .filter-row input[type="number"] {
-            width: 60px;
+            width: 55px;
             padding: 5px 8px;
             margin: 0;
+            font-size: 12px;
         }
         .filter-row input[type="text"] {
             flex: 1;
             padding: 8px;
             margin: 0;
+            font-size: 12px;
         }
-        #saveFiltersBtn { background: #ff9800; color: white; }
-        #saveFiltersBtn:hover { background: #f57c00; }
-        .filter-status { font-size: 12px; color: #888; margin-top: 10px; }
+        #saveFiltersBtn { background: var(--cf-orange); color: white; }
+        #saveFiltersBtn:hover { background: #b8913a; box-shadow: 0 4px 12px rgba(201,160,80,0.3); }
+        .filter-status { font-size: 11px; color: #888; margin-top: 10px; }
+
+        /* Auto-Fill Section */
+        #autofillSection {
+            margin-top: 25px;
+            padding: 12px;
+            background: #e8f5f1;
+            border: 1px solid #d0e8e0;
+            border-radius: 8px;
+        }
+        #autofillSection h3 { margin-top: 0; color: var(--cf-dark-green); font-size: 13px; margin-bottom: 8px; }
+        #autofillSection > p { font-size: 11px; margin-bottom: 10px; }
+        .autofill-group {
+            margin-bottom: 10px;
+            padding: 8px 10px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #e0ddd0;
+        }
+        .autofill-group .filter-row {
+            margin: 6px 0;
+        }
+        .autofill-group .filter-row label {
+            font-size: 11px;
+            min-width: 130px;
+        }
+        .autofill-group .filter-row input,
+        .autofill-group .filter-row select {
+            padding: 5px 8px;
+            font-size: 11px;
+        }
+        .autofill-label {
+            display: block;
+            font-weight: 600;
+            color: var(--cf-text-green);
+            margin-bottom: 6px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        #saveAutofillBtn { background: var(--cf-dark-green); color: white; padding: 8px 16px; font-size: 11px; }
+        #saveAutofillBtn:hover { background: #2d6b52; box-shadow: 0 4px 12px rgba(61,139,110,0.3); }
 
         /* Firebase Section */
         #firebaseSection {
-            margin-top: 30px;
-            padding: 20px;
-            background: #fff8e1;
-            border: 1px solid #ffe082;
-            border-radius: 8px;
+            margin-top: 25px;
+            padding: 16px;
+            background: #fdfcf8;
+            border: 1px solid #e8e0d0;
+            border-left: 3px solid var(--cf-healing-yellow);
+            border-radius: 5px;
         }
-        #firebaseSection h3 { margin-top: 0; color: #f57c00; }
+        #firebaseSection h3 { margin-top: 0; color: #6b5a30; }
         #firebaseSection textarea {
             height: 120px;
             font-family: monospace;
-            font-size: 12px;
+            font-size: 11px;
         }
-        #saveFirebaseBtn { background: #f57c00; color: white; }
-        #saveFirebaseBtn:hover { background: #ef6c00; }
-        #syncToCloudBtn { background: #4caf50; color: white; margin-left: 10px; }
-        #syncToCloudBtn:hover { background: #43a047; }
-        .firebase-status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px; }
-        .firebase-connected { background: #e8f5e9; color: #4caf50; }
-        .firebase-disconnected { background: #ffebee; color: #f44336; }
+        #saveFirebaseBtn { background: var(--cf-healing-yellow); color: #5a4a20; }
+        #saveFirebaseBtn:hover { background: #e5c87a; box-shadow: 0 4px 12px rgba(240,213,140,0.4); }
+        #syncToCloudBtn { background: var(--cf-dark-green); color: white; margin-left: 10px; }
+        #syncToCloudBtn:hover { background: #2d6b52; box-shadow: 0 4px 12px rgba(61,139,110,0.3); }
+        .firebase-status { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 10px; }
+        .firebase-connected { background: #e8f5f1; color: var(--cf-dark-green); }
+        .firebase-disconnected { background: #fdf0f0; color: var(--cf-grey); }
     </style>
 </head>
 <body>
@@ -146,8 +288,23 @@
         </div>
 
         <div class="profile-section">
-            <span class="profile-label">Skills:</span>
-            <div id="profileSkills"></div>
+            <span class="profile-label">Work History:</span>
+            <div id="profileExperience"></div>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Technical Skills:</span>
+            <div id="profileHardSkills"></div>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Soft Skills:</span>
+            <div id="profileSoftSkills"></div>
+        </div>
+
+        <div class="profile-section">
+            <span class="profile-label">Top Achievements:</span>
+            <ul id="profileAchievements" class="achievement-list"></ul>
         </div>
 
         <div class="profile-section">
@@ -195,6 +352,138 @@
 
         <button id="saveFiltersBtn">Save Filters</button>
         <div id="filterStatus" class="filter-status"></div>
+    </div>
+
+    <!-- Application Auto-Fill Section -->
+    <div id="autofillSection">
+        <h3>Application Auto-Fill</h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Save your common application answers. These will auto-fill on Workday, Greenhouse, and Lever forms.</p>
+
+        <div class="autofill-group">
+            <label class="autofill-label">Work Authorization</label>
+            <div class="filter-row">
+                <label for="authUSA">Authorized to work in US?</label>
+                <select id="authUSA" style="width: 100px;">
+                    <option value="">--</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+            <div class="filter-row">
+                <label for="sponsorship">Require visa sponsorship?</label>
+                <select id="sponsorship" style="width: 100px;">
+                    <option value="">--</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="autofill-group">
+            <label class="autofill-label">Experience</label>
+            <div class="filter-row">
+                <label for="yearsExp">Years of experience:</label>
+                <input type="number" id="yearsExp" min="0" max="50" style="width: 60px;">
+            </div>
+            <div class="filter-row">
+                <label for="currentTitle">Current job title:</label>
+                <input type="text" id="currentTitle" placeholder="e.g., Product Manager" style="flex: 1;">
+            </div>
+            <div class="filter-row">
+                <label for="currentCompany">Current company:</label>
+                <input type="text" id="currentCompany" placeholder="e.g., Google" style="flex: 1;">
+            </div>
+        </div>
+
+        <div class="autofill-group">
+            <label class="autofill-label">Personal Info</label>
+            <div class="filter-row">
+                <label for="fullName">Full name:</label>
+                <input type="text" id="fullName" placeholder="John Doe" style="flex: 1;">
+            </div>
+            <div class="filter-row">
+                <label for="email">Email:</label>
+                <input type="email" id="email" placeholder="john@example.com" style="flex: 1;">
+            </div>
+            <div class="filter-row">
+                <label for="phone">Phone:</label>
+                <input type="tel" id="phone" placeholder="555-123-4567" style="flex: 1;">
+            </div>
+            <div class="filter-row">
+                <label for="linkedIn">LinkedIn URL:</label>
+                <input type="url" id="linkedIn" placeholder="https://linkedin.com/in/..." style="flex: 1;">
+            </div>
+        </div>
+
+        <div class="autofill-group">
+            <label class="autofill-label">Location</label>
+            <div class="filter-row">
+                <label for="city">City:</label>
+                <input type="text" id="city" placeholder="San Francisco" style="flex: 1;">
+            </div>
+            <div class="filter-row">
+                <label for="state">State:</label>
+                <input type="text" id="state" placeholder="CA" style="width: 60px;">
+            </div>
+            <div class="filter-row">
+                <label for="zipCode">ZIP Code:</label>
+                <input type="text" id="zipCode" placeholder="94103" style="width: 80px;">
+            </div>
+            <div class="filter-row">
+                <label for="willingRelocate">Willing to relocate?</label>
+                <select id="willingRelocate" style="width: 100px;">
+                    <option value="">--</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="autofill-group">
+            <label class="autofill-label">Diversity (Optional)</label>
+            <div class="filter-row">
+                <label for="gender">Gender:</label>
+                <select id="gender" style="width: 150px;">
+                    <option value="">Decline to state</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="nonbinary">Non-binary</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="filter-row">
+                <label for="ethnicity">Ethnicity:</label>
+                <select id="ethnicity" style="width: 200px;">
+                    <option value="">Decline to state</option>
+                    <option value="asian">Asian</option>
+                    <option value="black">Black or African American</option>
+                    <option value="hispanic">Hispanic or Latino</option>
+                    <option value="native">Native American</option>
+                    <option value="pacific">Pacific Islander</option>
+                    <option value="white">White</option>
+                    <option value="two">Two or more races</option>
+                </select>
+            </div>
+            <div class="filter-row">
+                <label for="veteran">Veteran status:</label>
+                <select id="veteran" style="width: 150px;">
+                    <option value="">Decline to state</option>
+                    <option value="yes">Veteran</option>
+                    <option value="no">Not a veteran</option>
+                </select>
+            </div>
+            <div class="filter-row">
+                <label for="disability">Disability status:</label>
+                <select id="disability" style="width: 200px;">
+                    <option value="">Decline to state</option>
+                    <option value="yes">Yes, I have a disability</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+        </div>
+
+        <button id="saveAutofillBtn">Save Auto-Fill Answers</button>
+        <div id="autofillStatus" class="filter-status"></div>
     </div>
 
     <!-- Firebase Cloud Sync Section -->

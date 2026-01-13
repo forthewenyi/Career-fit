@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { CandidateProfileSchema, FitAnalysisSchema, getJsonSchema, cleanSchemaForGemini } from './schemas.js';
+import { CandidateProfileSchema, getJsonSchema, cleanSchemaForGemini } from './schemas.js';
 import {
     initFirebase,
     saveJobToFirebase,
@@ -88,12 +88,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; // Keep channel open for async response
     }
 
-    // Handle scoreJob - for batch scanning
-    if (message.type === 'scoreJob') {
-        handleScoreJob(message.job, sendResponse);
-        return true; // Keep channel open for async response
-    }
-
     // Handle matchBullets - Phase 6 resume bullet matching
     if (message.type === 'matchBullets') {
         handleMatchBullets(message.job, sendResponse);
@@ -113,20 +107,103 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             summarizeRole(message.text, data.geminiApiKey, sender.tab.id);
         });
     } else if (message.type === 'analyzeJobHtml') {
-        // Get API Key and Resume from storage first
-        chrome.storage.sync.get(['geminiApiKey', 'userResume'], (data) => {
-            if (!data.geminiApiKey || !data.userResume) {
+        // Get API Key and candidate profile from storage
+        (async () => {
+            const syncData = await chrome.storage.sync.get(['geminiApiKey']);
+            const localData = await chrome.storage.local.get(['candidateProfile']);
+
+            if (!syncData.geminiApiKey) {
                 chrome.tabs.sendMessage(sender.tab.id, {
                     type: 'analysisError',
-                    error: 'API Key or Resume not found. Please set them in the extension options.'
+                    error: 'API Key not found. Please set it in the extension options.'
                 });
                 return;
             }
-            // If we have the data, call the AI
-            callGemini(message.text, data.userResume, data.geminiApiKey, sender.tab.id);
-        });
+
+            if (!localData.candidateProfile) {
+                chrome.tabs.sendMessage(sender.tab.id, {
+                    type: 'analysisError',
+                    error: 'Profile not found. Please analyze your resume first in the extension options.'
+                });
+                return;
+            }
+
+            // Use enhanced profile instead of raw resume for faster, accurate matching
+            callGemini(message.text, localData.candidateProfile, syncData.geminiApiKey, sender.tab.id);
+        })();
     }
 });
+
+// --- Format candidate profile as structured text for AI matching ---
+function formatProfileForMatching(profile) {
+    let text = '';
+
+    // Basic info
+    text += `EXPERIENCE: ${profile.yearsExperience} years | Level: ${profile.seniorityLevel}\n`;
+
+    // Education
+    if (profile.education) {
+        text += `EDUCATION: ${profile.education.highestDegree} in ${profile.education.field}`;
+        if (profile.education.schools?.length) {
+            text += ` (${profile.education.schools.join(', ')})`;
+        }
+        text += '\n';
+    }
+
+    // Work history with context
+    if (profile.experience?.length) {
+        text += '\nWORK HISTORY:\n';
+        profile.experience.forEach(exp => {
+            text += `- ${exp.title} at ${exp.company} (${exp.years} years)\n`;
+            if (exp.highlights?.length) {
+                exp.highlights.forEach(h => {
+                    text += `  • ${h}\n`;
+                });
+            }
+        });
+    }
+
+    // Technical skills with context
+    if (profile.hardSkills?.length) {
+        text += '\nTECHNICAL SKILLS:\n';
+        profile.hardSkills.forEach(skill => {
+            if (typeof skill === 'object' && skill.skill) {
+                text += `- ${skill.skill} (${skill.years} years): ${skill.context}\n`;
+            } else {
+                // Fallback for old format (just string array)
+                text += `- ${skill}\n`;
+            }
+        });
+    }
+
+    // Soft skills
+    if (profile.softSkills?.length) {
+        text += `\nSOFT SKILLS: ${profile.softSkills.join(', ')}\n`;
+    }
+
+    // Top achievements
+    if (profile.topAchievements?.length) {
+        text += '\nTOP ACHIEVEMENTS:\n';
+        profile.topAchievements.forEach(a => {
+            text += `• ${a}\n`;
+        });
+    }
+
+    // Certifications
+    if (profile.certifications?.length) {
+        text += `\nCERTIFICATIONS: ${profile.certifications.join(', ')}\n`;
+    }
+
+    // Functions and industries
+    if (profile.functions?.length) {
+        text += `\nFUNCTIONS: ${profile.functions.join(', ')}\n`;
+    }
+    if (profile.industries?.length) {
+        text += `INDUSTRIES: ${profile.industries.join(', ')}\n`;
+    }
+
+    return text;
+}
 
 // --- Shared HTML formatting for consistent design ---
 function formatRoleHtml(data, options = {}) {
@@ -136,25 +213,23 @@ function formatRoleHtml(data, options = {}) {
     const func = data.function || '';
     const uniqueReqs = data.uniqueRequirements || [];
 
-    // Score color
-    let scoreColor = '#9e9e9e';
-    if (fitScore >= 4) scoreColor = '#4caf50';
-    else if (fitScore >= 3) scoreColor = '#ff9800';
-    else if (fitScore >= 2) scoreColor = '#ff5722';
-    else if (fitScore >= 1) scoreColor = '#f44336';
+    // Score color using trend palette
+    let scoreColor = '#4a4a4a'; // grey for low
+    if (fitScore >= 4) { scoreColor = '#3d8b6e'; }
+    else if (fitScore >= 3) { scoreColor = '#c9a050'; }
 
-    let html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5;">`;
+    let html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; line-height: 1.35;">`;
 
     // Score badge (only for Assess)
     if (showScore && fitScore !== null) {
         html += `
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #eee;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: ${scoreColor}; display: flex; align-items: center; justify-content: center;">
-                    <span style="color: white; font-size: 24px; font-weight: 700;">${fitScore}</span>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
+                <div style="width: 38px; height: 38px; border-radius: 50%; background: ${scoreColor}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <span style="color: white; font-size: 18px; font-weight: 700;">${fitScore}</span>
                 </div>
                 <div>
-                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">Fit Score</div>
-                    <div style="font-size: 18px; font-weight: 600; color: ${scoreColor};">${fitScore >= 4 ? 'Great Match' : fitScore >= 3 ? 'Good Match' : fitScore >= 2 ? 'Stretch' : 'Low Match'}</div>
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #222;">Fit Score</div>
+                    <div style="font-size: 14px; font-weight: 600; color: ${scoreColor};">${fitScore >= 4 ? 'Great Match' : fitScore >= 3 ? 'Good Match' : fitScore >= 2 ? 'Stretch' : 'Low Match'}</div>
                 </div>
             </div>
         `;
@@ -163,59 +238,60 @@ function formatRoleHtml(data, options = {}) {
     // Disqualifiers warning (missing minimum qualifications)
     if (isAssess && disqualifiers.length > 0) {
         html += `
-            <div style="background: #ffebee; border: 1px solid #ffcdd2; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span style="font-size: 16px;">⚠️</span>
-                    <span style="font-size: 12px; font-weight: 600; color: #c62828; text-transform: uppercase; letter-spacing: 0.5px;">Missing Minimum Qualifications</span>
+            <div style="background: #ffebee; border: 1px solid #ffcdd2; border-radius: 5px; padding: 8px; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                    <span style="font-size: 14px;">⚠️</span>
+                    <span style="font-size: 11px; font-weight: 600; color: #c62828; text-transform: uppercase; letter-spacing: 0.5px;">Missing Minimum Qualifications</span>
                 </div>
                 ${disqualifiers.map(d => `
-                    <div style="margin-bottom: 8px; padding-left: 24px;">
-                        <div style="font-size: 13px; color: #b71c1c; font-weight: 500;">${d.requirement}</div>
-                        ${d.resumeHas ? `<div style="font-size: 12px; color: #666; margin-top: 2px;">Your resume: ${d.resumeHas}</div>` : ''}
+                    <div style="margin-bottom: 4px; padding-left: 20px;">
+                        <div style="font-size: 11px; color: #b71c1c; font-weight: 500;">${d.requirement}</div>
+                        ${d.resumeHas ? `<div style="font-size: 12px; color: #666; margin-top: 1px;">Your resume: ${d.resumeHas}</div>` : ''}
                     </div>
                 `).join('')}
             </div>
         `;
     }
 
-    // Role basics
+    // Role basics - Creamy white tags with green text
     html += `
-        <div style="margin-bottom: 16px;">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-                <span style="background: #e3f2fd; color: #1565c0; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${years}</span>
-                ${managerType ? `<span style="background: ${managerType === 'People Manager' ? '#f3e5f5' : '#e8f5e9'}; color: ${managerType === 'People Manager' ? '#7b1fa2' : '#2e7d32'}; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${managerType}</span>` : ''}
+        <div style="margin-bottom: 10px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;">
+                <span style="background: #F5F3E7; color: #2d6b52; padding: 4px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; border: 1px solid #e0ddd0;">${years}</span>
+                ${managerType ? `<span style="background: ${managerType === 'People Manager' ? '#f5f0e0' : '#e8f5f1'}; color: ${managerType === 'People Manager' ? '#6b5a30' : '#2d6b52'}; padding: 4px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; border: 1px solid ${managerType === 'People Manager' ? '#e8e0d0' : '#d0e8e0'};">${managerType}</span>` : ''}
             </div>
-            ${func ? `<p style="margin: 0; font-size: 14px; color: #555;">${func}</p>` : ''}
+            ${func ? `<p style="margin: 6px 0 0 0; font-size: 13px; color: #444; line-height: 1.4;">${func}</p>` : ''}
         </div>
     `;
 
     // Role requirements
     if (uniqueReqs.length > 0) {
         html += `
-            <div style="margin-bottom: 16px;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px;">Role Looking For</div>
+            <div style="margin-bottom: 8px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #2d6b52; margin-bottom: 4px; font-weight: 600;">Looking For</div>
                 <ul style="margin: 0; padding-left: 16px;">
-                    ${uniqueReqs.map(req => `<li style="font-size: 13px; color: #333; margin-bottom: 4px;">${req}</li>`).join('')}
+                    ${uniqueReqs.map(req => `<li style="font-size: 12px; color: #333; margin-bottom: 2px;">${req}</li>`).join('')}
                 </ul>
             </div>
         `;
     } else if (!isAssess) {
-        html += `<p style="color: #888; font-style: italic; font-size: 13px;">Standard role - no specific requirements</p>`;
+        html += `<p style="color: #888; font-style: italic; font-size: 11px;">Standard role - no specific requirements</p>`;
     }
 
-    // Gaps with learning resources and keywords (only for Assess)
+    // Gaps with learning resources - Yellow left border, cream background
     if (isAssess && gaps.length > 0) {
         html += `
-            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #e65100; margin-bottom: 10px;">Skills to Develop</div>
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #2d6b52; margin-bottom: 4px; font-weight: 600;">Skills to Develop</div>
                 ${gaps.map(gap => `
-                    <div style="background: #fff8e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
-                        <div style="font-size: 13px; font-weight: 600; color: #333;">${gap.skill || 'Unknown skill'}</div>
-                        ${gap.resources ? `<div style="font-size: 12px; color: #555; margin: 4px 0;">📚 ${gap.resources}</div>` : ''}
+                    <div style="background: #fdfcf8; border-radius: 5px; padding: 6px 8px; margin-bottom: 4px; border-left: 3px solid #F0D58C; position: relative;">
+                        <button class="save-skill-btn" data-skill="${(gap.skill || '').replace(/"/g, '&quot;')}" data-resources="${(gap.resources || '').replace(/"/g, '&quot;')}" data-keywords="${(gap.keywords || []).join(',').replace(/"/g, '&quot;')}" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #d0e8e0; background: #e8f5f1; color: #2d6b52; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 1;" title="Save to learning list">+</button>
+                        <div style="font-size: 12px; font-weight: 600; color: #333; padding-right: 24px;">${gap.skill || 'Unknown skill'}</div>
+                        ${gap.resources ? `<div style="font-size: 12px; color: #555; margin-top: 1px;">${gap.resources}</div>` : ''}
                         ${gap.keywords && gap.keywords.length > 0 ? `
-                            <div style="margin-top: 6px;">
-                                <span style="font-size: 11px; color: #888;">Add to resume: </span>
-                                ${gap.keywords.map(kw => `<span style="background: #e8f5e9; color: #2e7d32; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px;">${kw}</span>`).join('')}
+                            <div style="margin-top: 4px;">
+                                <span style="font-size: 12px; color: #888;">Add to resume: </span>
+                                ${gap.keywords.map(kw => `<span style="background: #e8f5f1; color: #2d6b52; padding: 1px 5px; border-radius: 4px; font-size: 12px; margin-right: 3px;">${kw}</span>`).join('')}
                             </div>
                         ` : ''}
                     </div>`).join('')}
@@ -235,7 +311,7 @@ async function summarizeRole(jobText, apiKey, tabId) {
             yearsRequired: z.string().describe('Years of experience mentioned (e.g., "5+ years", "3-5 years"). If not mentioned, say "Not specified".'),
             managerType: z.string().describe('"IC" or "People Manager"'),
             function: z.string().describe('Plain English: what kind of work? E.g., "Engineering - shipping software with devs", "Operations - internal processes", "Product - building features"'),
-            uniqueRequirements: z.array(z.string()).describe('What makes THIS role different. Include: specific domain/industry, specific products, specific tools/skills, company-specific processes, hardware vs software, target audience. Plain English + (original term). Max 8.')
+            uniqueRequirements: z.array(z.string()).describe('Specific skills/tools/domains needed. Max 6 short items.')
         });
 
         const rawSchema = zodToJsonSchema(zodSchema);
@@ -244,11 +320,37 @@ async function summarizeRole(jobText, apiKey, tabId) {
 
         const prompt = `Job: ${jobText}
 
-Extract what makes this role UNIQUE:
-- yearsRequired: exact years mentioned
-- managerType: IC or People Manager
-- function: what kind of work (plain English)
-- uniqueRequirements: specific domain, products, tools, processes, audience. NOT generic PM skills. Plain English + (original jargon). Max 8.`;
+Extract key info:
+- yearsRequired: exact years (e.g., "6+ years")
+- managerType: "IC" or "People Manager"
+- function: 1 sentence - what does this person DO daily?
+- uniqueRequirements: 4-6 SPECIFIC things this role needs
+
+GOOD unique requirements (things that filter out most candidates):
+- "Healthcare industry required"
+- "PMP certification required"
+- "Tableau proficiency"
+- "On-site 5 days/week"
+- "No visa sponsorship"
+- "Masters degree preferred"
+- "Spanish fluency required"
+- "AWS/Azure experience"
+
+BAD - NEVER include these generic skills (every PM/manager has them):
+- "Cross-functional collaboration"
+- "Project management"
+- "Stakeholder management"
+- "Strong communication"
+- "Data analysis skills"
+- "Problem solving"
+- "Detail-oriented"
+- "Fast-paced environment"
+- "Team collaboration"
+- "Strategic thinking"
+
+RULE: If 80% of applicants would have this skill, it's NOT unique. Skip it.
+
+Each item: max 5 words, no parentheses, no repetition.`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -306,14 +408,14 @@ Extract what makes this role UNIQUE:
     }
 }
 
-async function callGemini(jobHtml, resume, apiKey, tabId) {
+async function callGemini(jobHtml, candidateProfile, apiKey, tabId) {
     try {
         const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
 
         // Schema for disqualifiers (missing MINIMUM qualifications)
         const disqualifierSchema = z.object({
             requirement: z.string().describe('The minimum requirement not met (e.g., "6 years management consulting")'),
-            resume_has: z.string().describe('What the resume shows instead (e.g., "3 years strategy experience")')
+            resume_has: z.string().describe('What the candidate has instead (e.g., "3 years strategy experience")')
         });
 
         // Schema for gaps (missing PREFERRED qualifications - fixable)
@@ -327,7 +429,7 @@ async function callGemini(jobHtml, resume, apiKey, tabId) {
             years_required: z.string().describe('Years of experience required. Say "Not specified" if not mentioned.'),
             manager_type: z.string().describe('"IC" or "People Manager"'),
             job_function: z.string().describe('What kind of work (e.g., "Product - building features")'),
-            unique_requirements: z.array(z.string()).describe('What makes this role unique. Max 8 items.'),
+            unique_requirements: z.array(z.string()).describe('ONLY requirements that filter 80%+ of candidates: specific tools (ServiceNow, Tableau), certifications (PMP, CPA), industries (healthcare, fintech), degrees, location/visa constraints. NEVER generic skills like "communication", "project management", "cross-functional collaboration", "data analysis", "stakeholder management". Max 6 items.'),
             disqualifiers: z.array(disqualifierSchema).describe('MINIMUM qualifications the candidate does NOT meet. Only include hard requirements from "Minimum Qualifications" section. Empty array if all minimums are met.'),
             fit_score: z.number().min(1).max(5).describe('Fit score 1-5. If disqualifiers exist, score should be 1-2.'),
             gaps: z.array(gapSchema).describe('PREFERRED qualifications gaps (nice-to-haves the candidate lacks). Not disqualifiers.')
@@ -345,7 +447,10 @@ async function callGemini(jobHtml, resume, apiKey, tabId) {
             'gaps'
         ];
 
-        const prompt = `Analyze this job against the resume. CRITICAL: Distinguish between MINIMUM and PREFERRED qualifications.
+        // Format candidate profile as structured text for better matching
+        const profileText = formatProfileForMatching(candidateProfile);
+
+        const prompt = `Analyze this job against the candidate profile. CRITICAL: Distinguish between MINIMUM and PREFERRED qualifications.
 
 **MINIMUM QUALIFICATIONS** (usually labeled "Minimum qualifications", "Requirements", or "Must have"):
 - If candidate does NOT meet these → add to "disqualifiers" array
@@ -360,10 +465,10 @@ async function callGemini(jobHtml, resume, apiKey, tabId) {
 - If no disqualifiers but some gaps → fit_score can be 3-4
 - If no disqualifiers and few/no gaps → fit_score can be 4-5
 
-**Resume:**
-${resume}
+**CANDIDATE PROFILE:**
+${profileText}
 
-**Job:**
+**JOB POSTING:**
 ${jobHtml}`;
 
         const response = await ai.models.generateContent({
@@ -409,7 +514,7 @@ ${jobHtml}`;
         }
         const fitScore = (typeof rawScore === 'number' && rawScore >= 1 && rawScore <= 5) ? rawScore : 3;
 
-        // Map gap fields from snake_case (now includes keywords instead of funFact)
+        // Map gap fields from snake_case
         const gaps = Array.isArray(analysisData.gaps)
             ? analysisData.gaps.map(gap => ({
                 skill: gap.skill_name || 'Unknown skill',
@@ -464,35 +569,58 @@ ${jobHtml}`;
 async function analyzeResume(resumeText, apiKey) {
     const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
 
-    const prompt = `You are a career coach analyzing a resume to help match this person to jobs.
+    const prompt = `You are a career coach analyzing a resume to create a RICH profile for job matching.
 
 RESUME:
 ${resumeText}
 
-IMPORTANT: Carefully scan the ENTIRE resume including the Education section which is often at the bottom. Look for degree names (BS, BA, MS, MBA, PhD, etc.), university/college names, and fields of study.
+IMPORTANT: Extract DETAILED information with context. This profile will be used to match against job postings, so include specifics like scale, metrics, and impact.
 
-Extract the following structured data:
+Extract the following:
 
-1. yearsExperience: Total years of professional experience (e.g., "7", "5-7"). Calculate from earliest job date to present.
-2. seniorityLevel: Current career level (Entry/Mid/Senior/Manager/Director/VP)
-3. education: REQUIRED - Look for Education section in resume
-   - highestDegree: Highest degree earned. Use the degree abbreviation only: PhD, MBA, MS, MA, BS, BA, BBA, Associate's. Do NOT expand MBA to "MBA in Business Administration" - just say "MBA".
-   - field: Field of study / major / concentration. For MBA, use the concentration if any (e.g., "Finance", "Marketing") or leave as "General Management". For other degrees, use the actual major (e.g., "Business Information Technology", "Computer Science").
-   - schools: Array of ALL schools/universities attended with their degrees, highest first (e.g., ["Kelley School of Business (MBA)", "Virginia Tech (BS)"])
-4. functions: Types of work they do (e.g., ["Product Management", "Operations", "Engineering"])
-5. industries: Industries they've worked in (e.g., ["CPG", "Tech", "Automotive"])
-6. hardSkills: Technical skills - tools, languages, methodologies (e.g., ["SQL", "Python", "Agile"])
-7. softSkills: Leadership, communication skills (e.g., ["Cross-functional leadership", "Stakeholder management"])
-8. certifications: Any certifications (e.g., ["PMP", "Six Sigma Green Belt"])
-9. targetTitles: 8-12 job titles they should search for - INCLUDE BOTH their current level AND entry-level/junior roles they qualify for (e.g., if they're a Senior PM, also include "Product Manager", "Associate Product Manager")
-10. searchQueries: 3-5 Boolean search strings for job boards (e.g., "product manager AND operations")
-11. keywords: 10-15 keywords that should appear in matching job descriptions
-12. hardFilters: Disqualifiers
-    - maxYearsRequired: Max years a job can require (their years + 2)
-    - excludeTitles: Titles too senior (e.g., ["VP", "Chief", "Director"] if they're Manager level)
-    - excludeRequirements: Requirements they can't meet (e.g., ["PhD", "CPA", "10+ years"])
+1. yearsExperience: Total years (e.g., "7", "5-7"). Calculate from earliest job to present.
 
-Be specific and actionable. The targetTitles and searchQueries will be used directly for job searching.`;
+2. seniorityLevel: Current level (Entry/Mid/Senior/Manager/Director/VP)
+
+3. education:
+   - highestDegree: Abbreviation only (PhD, MBA, MS, BS, etc.)
+   - field: Major/concentration
+   - schools: Array with degrees (e.g., ["Kelley School of Business (MBA)", "Virginia Tech (BS)"])
+
+4. experience: Array of up to 4 most recent roles, each with:
+   - title: Job title
+   - company: Company name
+   - years: Years in role
+   - highlights: 2-3 KEY achievements WITH METRICS (e.g., "Led team of 8 engineers", "Reduced costs by 40%", "Launched product to 10M users")
+
+5. functions: Types of work (e.g., ["Product Management", "Operations"])
+
+6. industries: Industries (e.g., ["CPG", "Tech", "FinTech"])
+
+7. hardSkills: Array of technical skills WITH CONTEXT, each with:
+   - skill: The skill name (e.g., "SQL", "Python", "Agile")
+   - context: How they used it with scale/impact (e.g., "Built ETL pipelines processing 10M records daily", "Led Agile transformation for 50-person team")
+   - years: Years of experience with this skill
+   Include 8-12 most relevant technical skills.
+
+8. softSkills: Leadership skills (e.g., ["Cross-functional leadership", "Executive communication"])
+
+9. certifications: Any certifications (e.g., ["PMP", "AWS Solutions Architect"])
+
+10. topAchievements: 3-5 MOST IMPRESSIVE resume bullets with metrics. These should be the standout accomplishments (e.g., "Grew revenue from $2M to $8M in 18 months", "Reduced customer churn by 35%")
+
+11. targetTitles: 8-12 job titles to search for (include current level AND junior roles)
+
+12. searchQueries: 3-5 Boolean search strings
+
+13. keywords: 10-15 keywords for matching jobs
+
+14. hardFilters:
+    - maxYearsRequired: Their years + 2
+    - excludeTitles: Too senior (e.g., ["VP", "Chief", "Director"])
+    - excludeRequirements: Can't meet (e.g., ["PhD", "CPA"])
+
+Be SPECIFIC. Include numbers, scales, and impact metrics wherever found in the resume.`;
 
     const schemaJson = getJsonSchema(CandidateProfileSchema);
 
@@ -524,90 +652,7 @@ Be specific and actionable. The targetTitles and searchQueries will be used dire
     return profile;
 }
 
-// --- Phase 5: Score Job for Batch Scanning ---
-async function handleScoreJob(job, sendResponse) {
-    try {
-        // Get API key and candidate profile
-        const syncData = await chrome.storage.sync.get(['geminiApiKey']);
-        const localData = await chrome.storage.local.get(['candidateProfile']);
-
-        if (!syncData.geminiApiKey) {
-            sendResponse({ success: false, error: 'API Key not found.' });
-            return;
-        }
-
-        if (!localData.candidateProfile) {
-            sendResponse({ success: false, error: 'Candidate profile not found. Please analyze your resume first.' });
-            return;
-        }
-
-        const result = await scoreJob(job, localData.candidateProfile, syncData.geminiApiKey);
-        sendResponse({ success: true, data: result });
-    } catch (error) {
-        console.error('CareerFit: Error scoring job:', error);
-        sendResponse({ success: false, error: error.message });
-    }
-}
-
-async function scoreJob(job, candidateProfile, apiKey) {
-    const ai = new GoogleGenAI({ vertexai: false, apiKey: apiKey });
-
-    // Create a job description string from available info
-    const jobDescription = `
-Job Title: ${job.title}
-Company: ${job.company}
-Location: ${job.location || 'Not specified'}
-Link: ${job.link}
-    `.trim();
-
-    const prompt = `Compare this candidate profile to this job posting and provide a fit score.
-
-CANDIDATE PROFILE:
-- Years of Experience: ${candidateProfile.yearsExperience}
-- Seniority Level: ${candidateProfile.seniorityLevel}
-- Functions: ${candidateProfile.functions?.join(', ') || 'Not specified'}
-- Industries: ${candidateProfile.industries?.join(', ') || 'Not specified'}
-- Hard Skills: ${candidateProfile.hardSkills?.join(', ') || 'Not specified'}
-- Soft Skills: ${candidateProfile.softSkills?.join(', ') || 'Not specified'}
-- Target Titles: ${candidateProfile.targetTitles?.join(', ') || 'Not specified'}
-
-JOB POSTING:
-${jobDescription}
-
-Score from 1-5:
-- 5: Excellent Fit - title matches target, experience level appropriate
-- 4: Good Fit - close title match, likely qualified
-- 3: Possible Fit - related field, some gaps
-- 2: Stretch - significant gaps but some transferable skills
-- 1: Poor Fit - major mismatches in title/function
-
-Based ONLY on title/company matching to candidate's target titles and experience level, give an honest assessment. Since we only have limited job info, focus on title relevance.`;
-
-    const schemaJson = getJsonSchema(FitAnalysisSchema);
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: schemaJson,
-        },
-    });
-
-    console.log('CareerFit: Score job response:', response.text);
-
-    let result;
-    try {
-        result = JSON.parse(response.text);
-    } catch (parseError) {
-        console.error('CareerFit: Failed to parse score response:', parseError);
-        throw new Error('Invalid response format from AI service');
-    }
-
-    return result;
-}
-
-// --- Phase 6: Resume Bullet Matching ---
+/// --- Phase 6: Resume Bullet Matching ---
 async function handleMatchBullets(job, sendResponse) {
     try {
         const syncData = await chrome.storage.sync.get(['geminiApiKey', 'userResume']);

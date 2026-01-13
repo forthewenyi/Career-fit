@@ -13,7 +13,7 @@ CareerFit AI analyzes job postings against your resume in seconds, giving you:
 - **Fit Score (1-5)** - Instantly know if a job is worth your time
 - **Gap Analysis** - See exactly what skills you're missing
 - **Learning Resources** - Get specific courses/books to close skill gaps
-- **Batch Scanning** - Score dozens of jobs at once on search results pages
+- **Auto-Fill** - Automatically fill common application questions (no API cost)
 
 ## Features
 
@@ -21,9 +21,42 @@ CareerFit AI analyzes job postings against your resume in seconds, giving you:
 |---------|-------------|
 | **Summarize** | Extract key requirements (years, IC vs Manager, unique skills) |
 | **Assess** | Full AI analysis with fit score, gaps, and learning resources |
-| **Scan Jobs** | Batch analyze all jobs on a search results page |
-| **History** | Track jobs you've analyzed, sorted by fit score |
-| **Apply Workflow** | Mark jobs as Applied, Interview, Rejected, etc. |
+| **History** | Track jobs with 5-tab view: All Jobs, Interested, Applied, To Learn, Learned |
+| **Skills Tracking** | Save skills to learn from gaps, mark as learned when complete |
+| **Apply Workflow** | Mark jobs as Scanned, Interested, or Applied |
+| **Auto-Fill** | Fill work authorization, diversity questions, and more |
+
+## How It Works
+
+### One-Time Setup
+1. Paste your resume in Options
+2. Click "Analyze My Resume" - AI extracts a rich profile with:
+   - Work history with achievements and metrics
+   - Skills with context (e.g., "SQL - Built pipelines for 10M users")
+   - Top accomplishments for matching
+
+### On Any Job Page
+- **Summarize** - Quick role overview (no API cost)
+- **Assess** - Deep fit analysis against your profile
+
+### Profile-Based Matching
+Your resume is converted to structured tags with context:
+```
+EXPERIENCE: 7 years | Level: Senior
+WORK HISTORY:
+- Senior PM at Google (3 years)
+  • Led team of 8 engineers
+  • Launched product to 10M users
+
+TECHNICAL SKILLS:
+- SQL (3 years): Built data pipelines serving 10M users
+- Python (2 years): ML models for fraud detection
+
+TOP ACHIEVEMENTS:
+• Grew revenue from $2M to $8M in 18 months
+```
+
+This gives faster responses while maintaining accuracy.
 
 ## Supported Sites
 
@@ -32,6 +65,7 @@ CareerFit AI analyzes job postings against your resume in seconds, giving you:
 - Interstride
 - Greenhouse job boards
 - Lever job boards
+- Application auto-fill on Workday, Greenhouse, Lever
 
 ## Tech Stack
 
@@ -40,14 +74,33 @@ CareerFit AI analyzes job postings against your resume in seconds, giving you:
 - **Build**: Webpack 5, Babel
 - **Storage**: Chrome sync/local storage (optional Firebase sync)
 
+## Design
+
+UI uses WGSN 2025 trend palette - combining restorative and minimal qualities with comforting soft pastels:
+
+| Color | Name | Hex | Pantone |
+|-------|------|-----|---------|
+| A | Healing Yellow | #F0D58C | 12-0825 TCX |
+| B | Calming Green | #9DC3B5 | 14-4807 TCX |
+| C | Circular Grey | #6B7B7C | 17-5104 TCX |
+| D | Creamy White | #F5F3E7 | 11-0107 TCX |
+| E | Elemental Blue | #9EB4D0 | 15-3920 TCX |
+| F | Ice Blue | #B5D1E8 | 14-4112 TCX |
+
+**Option B (Current):** Green + Cream Hybrid with tighter spacing (12px padding, 12px font, 38px score badge)
+- Action buttons: Creamy White (#F5F3E7) background with Dark Green (#2d6b52) text
+- Score badges: Green (#3d8b6e) for 4-5, Orange (#c9a050) for 3, Grey (#4a4a4a) for 1-2
+- Tab styling: Black text (#222) active, Grey (#666) inactive
+
 ## Installation
 
 1. Clone the repo
 2. Run `npm install && npm run build`
 3. Open `chrome://extensions/` → Enable Developer Mode
-4. Click "Load unpacked" → Select the `/build` folder
+4. Click "Load unpacked" → Select the project folder
 5. Get a [Gemini API key](https://aistudio.google.com/apikey)
 6. Right-click extension icon → Options → Paste API key and resume
+7. Click "Analyze My Resume" to generate your profile
 
 ## Privacy
 

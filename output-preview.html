@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CareerFit UI Preview</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+            max-width: 1400px;
+            margin: 0 auto;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #333;
+        }
+        h1 { color: #333; margin-bottom: 10px; font-weight: 600; }
+        h2 { color: #333; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 8px; font-weight: 600; font-size: 18px; }
+        .description { color: #666; font-size: 13px; margin-bottom: 15px; }
+        .flow-note { color: #2d6b52; font-size: 12px; font-weight: 600; margin-bottom: 8px; background: #e8f5f1; padding: 4px 10px; border-radius: 4px; display: inline-block; }
+
+        :root {
+            --healing-yellow: #F0D58C;
+            --calming-green: #9DC3B5;
+            --creamy-white: #F5F3E7;
+            --dark-green: #3d8b6e;
+        }
+
+        .preview-row {
+            display: flex;
+            gap: 20px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .preview-box {
+            flex: 1;
+            min-width: 280px;
+            max-width: 360px;
+        }
+        .preview-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        .modal-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            padding: 12px;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        /* Component Styles */
+        .score-badge { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dark-green); flex-shrink: 0; }
+        .score-badge span { color: white; font-size: 18px; font-weight: 700; }
+        .score-badge-sm { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .score-badge-sm span { color: white; font-size: 14px; font-weight: 700; }
+        .tag { background: var(--creamy-white); color: #2d6b52; padding: 4px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; display: inline-block; margin: 1px; border: 1px solid #e0ddd0; }
+        .tag-ic { background: #e8f5f1; color: #2d6b52; border-color: #d0e8e0; }
+        .tag-manager { background: #f5f0e0; color: #6b5a30; border-color: #e8e0d0; }
+        .gap-card { background: #fdfcf8; border-radius: 5px; padding: 8px 10px; margin-bottom: 6px; border-left: 3px solid var(--healing-yellow); }
+        .gap-title { font-size: 12px; font-weight: 600; color: #333; }
+        .gap-resources { font-size: 12px; color: #555; margin-top: 2px; }
+        .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #2d6b52; margin-bottom: 6px; font-weight: 600; }
+        .cached-banner { background: var(--creamy-white); padding: 6px 10px; border-radius: 5px; margin-bottom: 10px; font-size: 12px; color: #2d6b52; border: 1px solid #e0ddd0; display: flex; justify-content: space-between; align-items: center; }
+        .history-item { background: #fdfcf8; border-radius: 5px; padding: 10px; margin-bottom: 6px; border-left: 3px solid var(--calming-green); }
+        .history-title { font-weight: 600; color: #222; font-size: 13px; }
+        .history-company { font-size: 12px; color: #222; }
+        .status-tag { font-size: 11px; padding: 3px 8px; border-radius: 8px; background: #e8f5f1; color: #2d6b52; font-weight: 500; }
+        .refresh-btn { background: var(--dark-green); color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; }
+        .score-section { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .score-label { font-size: 11px; text-transform: uppercase; color: #222; font-weight: 600; }
+        .score-text { font-size: 14px; font-weight: 600; color: var(--dark-green); }
+        .tags-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+        .role-desc { margin: 6px 0 0 0; font-size: 13px; color: #444; line-height: 1.4; }
+        .requirements-list { font-size: 12px; margin: 0; padding-left: 18px; }
+        .requirements-list li { margin-bottom: 4px; color: #333; }
+        .gaps-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+        .history-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <h1>CareerFit UI Preview</h1>
+    <p class="description">Interactive preview organized by user flow. Click button → see result.</p>
+
+    <!-- ============================================
+         1. BUTTON BAR (Entry Point)
+         ============================================ -->
+    <h2>1. Button Bar (Entry Point)</h2>
+    <p class="description">Drag handle: 11px #999. Buttons: 12px bold #5a9a88. Minimize: 16px #999.</p>
+
+    <div class="preview-row">
+        <div class="preview-box">
+            <div class="preview-label">Expanded State</div>
+            <div style="background: rgba(255, 255, 255, 0.95); padding: 6px 10px; border-radius: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: inline-flex; gap: 8px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 4px; padding: 4px 6px; color: #999; font-size: 11px; font-weight: 600; cursor: move;">⋮⋮ CF</div>
+                <button style="background: #F5F3E7; color: #5a9a88; border: 1px solid #e8e6da; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Summarize</button>
+                <button style="background: #F5F3E7; color: #5a9a88; border: 1px solid #e8e6da; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Assess</button>
+                <button style="background: #F5F3E7; color: #5a9a88; border: 1px solid #e8e6da; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Auto-fill</button>
+                <button style="background: #F5F3E7; color: #5a9a88; border: 1px solid #e8e6da; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">History</button>
+                <button style="background: none; border: none; font-size: 16px; cursor: pointer; color: #999; padding: 2px 6px;">−</button>
+            </div>
+        </div>
+
+        <div class="preview-box">
+            <div class="preview-label">Minimized State</div>
+            <div style="background: rgba(255, 255, 255, 0.95); padding: 6px 8px; border-radius: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: inline-flex; gap: 8px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 4px; padding: 4px 6px; color: #999; font-size: 11px; font-weight: 600; cursor: move;">⋮⋮ CF</div>
+                <button style="background: #F5F3E7; color: #5a9a88; border: 1px solid #e8e6da; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Assess</button>
+                <button style="background: none; border: none; font-size: 16px; cursor: pointer; color: #999; padding: 2px 6px;">+</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         2. SUMMARIZE FLOW
+         ============================================ -->
+    <h2>2. Summarize Flow</h2>
+    <p class="description">Click Summarize → Loading → Output. Tags: 12px bold. Section labels: 11px uppercase #2d6b52. Requirements: 12px. Role desc: 13px.</p>
+
+    <div class="preview-row">
+        <div class="preview-box">
+            <div class="preview-label">Loading State</div>
+            <div class="modal-container">
+                <div style="text-align: center; padding: 20px;">
+                    <div style="display: inline-block; width: 32px; height: 32px; border: 3px solid #f3f3f3; border-top: 3px solid var(--dark-green); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="margin-top: 12px; color: #666; font-size: 13px;">Summarizing job...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box">
+            <div class="preview-label">Summarize Output</div>
+            <div class="modal-container">
+                <div class="cached-banner"><span>Cached 1/12</span> <button class="refresh-btn">Refresh</button></div>
+                <div style="margin-bottom: 10px;">
+                    <div class="tags-row">
+                        <span class="tag">5+ years</span>
+                        <span class="tag tag-ic">IC</span>
+                    </div>
+                    <p class="role-desc">Product Management for Retail/Shopping Ads - building features for advertisers and retailers</p>
+                </div>
+                <div class="section-label" style="margin-top: 10px;">Looking For</div>
+                <ul class="requirements-list">
+                    <li>Experience with ads products or retail/shopping industry</li>
+                    <li>Technical background (CS degree or equivalent)</li>
+                    <li>Experience working with ML/AI systems</li>
+                    <li>Track record of launching products at scale</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         3. ASSESS FLOW
+         ============================================ -->
+    <h2>3. Assess Flow</h2>
+    <p class="description">Click Assess → Loading → Output with Score → or Disqualifiers Warning. Score badge: 38px with 18px number. Score text: 14px bold.</p>
+
+    <div class="preview-row">
+        <div class="preview-box">
+            <div class="preview-label">Loading State</div>
+            <div class="modal-container">
+                <div style="text-align: center; padding: 20px;">
+                    <div style="display: inline-block; width: 32px; height: 32px; border: 3px solid #f3f3f3; border-top: 3px solid var(--dark-green); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="margin-top: 12px; color: #666; font-size: 13px;">Analyzing job fit...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box">
+            <div class="preview-label">Assess Output (Score 4)</div>
+            <div class="modal-container">
+                <div class="score-section">
+                    <div class="score-badge"><span>4</span></div>
+                    <div>
+                        <div class="score-label">Fit Score</div>
+                        <div class="score-text">Great Match</div>
+                    </div>
+                </div>
+                <div class="tags-row">
+                    <span class="tag">5+ years</span>
+                    <span class="tag tag-ic">IC</span>
+                </div>
+                <div class="gaps-section">
+                    <div class="section-label">Skills to Develop</div>
+                    <div class="gap-card" style="position: relative;">
+                        <div style="position: absolute; top: 6px; right: 6px;">
+                            <button style="width: 22px; height: 22px; border-radius: 50%; border: 1px solid #d0e8e0; background: #e8f5f1; color: var(--dark-green); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;">+</button>
+                        </div>
+                        <div class="gap-title">Retail/Shopping Ads Experience</div>
+                        <div class="gap-resources">Google Ads certification, Retail media courses</div>
+                    </div>
+                    <div class="gap-card" style="position: relative;">
+                        <div style="position: absolute; top: 6px; right: 6px;">
+                            <button style="width: 22px; height: 22px; border-radius: 50%; border: 1px solid #d0e8e0; background: #e8f5f1; color: var(--dark-green); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;">+</button>
+                        </div>
+                        <div class="gap-title">Ad Tech Ecosystem</div>
+                        <div class="gap-resources">IAB certifications</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box">
+            <div class="preview-label">Disqualifiers Warning</div>
+            <div class="modal-container">
+                <div class="score-section">
+                    <div class="score-badge" style="background: #4a4a4a;"><span>2</span></div>
+                    <div>
+                        <div class="score-label">Fit Score</div>
+                        <div class="score-text" style="color: #4a4a4a;">Low Match</div>
+                    </div>
+                </div>
+                <div style="background: #ffebee; border: 1px solid #ffcdd2; border-radius: 5px; padding: 8px; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                        <span style="font-size: 14px;">⚠️</span>
+                        <span style="font-size: 11px; font-weight: 600; color: #c62828; text-transform: uppercase; letter-spacing: 0.5px;">Missing Minimum Qualifications</span>
+                    </div>
+                    <div style="margin-bottom: 6px; padding-left: 20px;">
+                        <div style="font-size: 12px; color: #b71c1c; font-weight: 500;">10+ years experience required</div>
+                        <div style="font-size: 12px; color: #666; margin-top: 2px;">Your resume: 5 years</div>
+                    </div>
+                    <div style="padding-left: 20px;">
+                        <div style="font-size: 12px; color: #b71c1c; font-weight: 500;">PhD in Computer Science required</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         4. HISTORY FLOW
+         ============================================ -->
+    <h2>4. History Flow</h2>
+    <p class="description">Click History → Modal with 5 tabs. Tabs: 12px bold. Title: 13px bold #222. Company: 12px #222. Date: 11px #4a4a4a. Score badge: 28px with 14px number.</p>
+
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 450px;">
+            <div class="preview-label">History Modal - 5 Tabs</div>
+            <div class="modal-container" id="mock-history-modal">
+                <!-- Tab buttons -->
+                <div style="display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #e0ddd0;">
+                    <button class="mock-tab active" data-panel="mock-all-jobs" style="flex: 1; padding: 8px 4px; border: none; border-bottom: 2px solid #3d8b6e; background: transparent; color: #222; cursor: pointer; font-size: 11px; font-weight: 600;">All (5)</button>
+                    <button class="mock-tab" data-panel="mock-interested" style="flex: 1; padding: 8px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">Interested (2)</button>
+                    <button class="mock-tab" data-panel="mock-applied" style="flex: 1; padding: 8px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">Applied (2)</button>
+                    <button class="mock-tab" data-panel="mock-skills" style="flex: 1; padding: 8px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">To Learn (3)</button>
+                    <button class="mock-tab" data-panel="mock-learned" style="flex: 1; padding: 8px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">Learned (2)</button>
+                </div>
+
+                <!-- All Jobs Panel -->
+                <div id="mock-all-jobs" class="mock-panel">
+                    <div class="history-item">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: var(--dark-green);"><span>4</span></div>
+                            <div><div class="history-title">Product Manager II, Retail Ads</div><div class="history-company">Google - Mountain View, CA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag">Applied</span><span style="font-size: 11px; color: #4a4a4a;">Jan 12</span></div>
+                    </div>
+                    <div class="history-item" style="border-left-color: #c9a050;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: var(--dark-green);"><span>4</span></div>
+                            <div><div class="history-title">Senior Product Manager</div><div class="history-company">Microsoft - Seattle, WA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag" style="background: #f5f0e0; color: #6b5a30;">Interested</span><span style="font-size: 11px; color: #4a4a4a;">Jan 10</span></div>
+                    </div>
+                    <div class="history-item">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: var(--dark-green);"><span>5</span></div>
+                            <div><div class="history-title">Staff PM - AI/ML Platform</div><div class="history-company">Anthropic - San Francisco, CA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag">Applied</span><span style="font-size: 11px; color: #4a4a4a;">Jan 8</span></div>
+                    </div>
+                    <div class="history-item" style="border-left-color: #9DC3B5;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: #c9a050;"><span>3</span></div>
+                            <div><div class="history-title">Technical PM - Ads</div><div class="history-company">Amazon - Seattle, WA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag" style="background: #F5F3E7; color: #2d6b52;">Scanned</span><span style="font-size: 11px; color: #4a4a4a;">Jan 6</span></div>
+                    </div>
+                </div>
+
+                <!-- Interested Panel -->
+                <div id="mock-interested" class="mock-panel" style="display: none;">
+                    <div class="history-item" style="border-left-color: #c9a050;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: var(--dark-green);"><span>4</span></div>
+                            <div><div class="history-title">Senior Product Manager</div><div class="history-company">Microsoft - Seattle, WA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag" style="background: #f5f0e0; color: #6b5a30;">Interested</span><span style="font-size: 11px; color: #4a4a4a;">Jan 10</span></div>
+                    </div>
+                    <div class="history-item" style="border-left-color: #c9a050;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: var(--dark-green);"><span>4</span></div>
+                            <div><div class="history-title">Product Lead - Payments</div><div class="history-company">Stripe - San Francisco, CA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag" style="background: #f5f0e0; color: #6b5a30;">Interested</span><span style="font-size: 11px; color: #4a4a4a;">Jan 9</span></div>
+                    </div>
+                </div>
+
+                <!-- Applied Panel -->
+                <div id="mock-applied" class="mock-panel" style="display: none;">
+                    <div class="history-item">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: var(--dark-green);"><span>4</span></div>
+                            <div><div class="history-title">Product Manager II, Retail Ads</div><div class="history-company">Google - Mountain View, CA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag">Applied</span><span style="font-size: 11px; color: #4a4a4a;">Jan 12</span></div>
+                    </div>
+                    <div class="history-item">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="score-badge-sm" style="background: var(--dark-green);"><span>5</span></div>
+                            <div><div class="history-title">Staff PM - AI/ML Platform</div><div class="history-company">Anthropic - San Francisco, CA</div></div>
+                        </div>
+                        <div class="history-meta"><span class="status-tag">Applied</span><span style="font-size: 11px; color: #4a4a4a;">Jan 8</span></div>
+                    </div>
+                </div>
+
+                <!-- Skills to Learn Panel -->
+                <div id="mock-skills" class="mock-panel" style="display: none;">
+                    <div class="gap-card" style="position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <div class="gap-title">Retail/Shopping Ads Experience</div>
+                                <div class="gap-resources">Google Ads certification, Retail media courses</div>
+                                <div style="margin-top: 4px;">
+                                    <span style="background: #e8f5f1; color: #2d6b52; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 3px;">shopping ads</span>
+                                    <span style="background: #e8f5f1; color: #2d6b52; padding: 2px 6px; border-radius: 4px; font-size: 11px;">retail media</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid #d0e8e0; background: #e8f5f1; color: var(--dark-green); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✓</button>
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid #e0ddd0; background: #F5F3E7; color: #4a4a4a; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="gap-card" style="position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <div class="gap-title">Machine Learning for Ads</div>
+                                <div class="gap-resources">Coursera ML specialization</div>
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid #d0e8e0; background: #e8f5f1; color: var(--dark-green); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✓</button>
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid #e0ddd0; background: #F5F3E7; color: #4a4a4a; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Learned Panel -->
+                <div id="mock-learned" class="mock-panel" style="display: none;">
+                    <div class="gap-card" style="background: #fdfcf8; border-left-color: #9DC3B5; position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <div class="gap-title" style="text-decoration: line-through; color: #888;">SQL & Data Analysis</div>
+                                <div class="gap-resources">Mode Analytics tutorials</div>
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--dark-green); background: var(--dark-green); color: white; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✓</button>
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid #e0ddd0; background: #F5F3E7; color: #4a4a4a; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="gap-card" style="background: #fdfcf8; border-left-color: #9DC3B5; position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <div class="gap-title" style="text-decoration: line-through; color: #888;">A/B Testing & Experimentation</div>
+                                <div class="gap-resources">Optimizely certification</div>
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--dark-green); background: var(--dark-green); color: white; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✓</button>
+                                <button style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid #e0ddd0; background: #F5F3E7; color: #4a4a4a; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         5. RESUME BULLET MATCHING
+         ============================================ -->
+    <h2>5. Resume Bullet Matching</h2>
+    <p class="description">Auto-triggered when marking a job as "Interested" in History. Shows how your resume bullets match job requirements.</p>
+
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 380px;">
+            <div class="preview-label">Resume Bullet Matching</div>
+            <div class="modal-container">
+                <div style="font-size: 13px; font-weight: 600; color: #222; margin-bottom: 4px;">Resume Match: Product Manager II</div>
+                <div style="color: #666; font-size: 12px; margin-bottom: 12px;">Google</div>
+
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #3d8b6e; margin-bottom: 6px; font-weight: 600;">Strong Matches (2)</div>
+                <ul style="margin: 0 0 12px 0; padding-left: 18px; font-size: 12px;">
+                    <li style="margin: 6px 0; color: #333;">
+                        "Led product strategy for $50M revenue line"
+                        <br><span style="color: #3d8b6e; font-size: 11px;">→ Demonstrates P&L ownership at scale</span>
+                    </li>
+                    <li style="margin: 6px 0; color: #333;">
+                        "Launched ML-powered recommendation engine"
+                        <br><span style="color: #3d8b6e; font-size: 11px;">→ Shows AI/ML product experience</span>
+                    </li>
+                </ul>
+
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #c9a050; margin-bottom: 6px; font-weight: 600;">Moderate Matches (1)</div>
+                <ul style="margin: 0 0 12px 0; padding-left: 18px; font-size: 12px;">
+                    <li style="margin: 6px 0; color: #333;">
+                        "Managed cross-functional team of 5"
+                        <br><span style="color: #c9a050; font-size: 11px;">→ Leadership experience, but smaller scale</span>
+                    </li>
+                </ul>
+
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #4a4a4a; margin: 12px 0 6px 0; font-weight: 600;">Suggestions</div>
+                <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #666;">
+                    <li style="margin: 4px 0;">Add metrics for retail/shopping experience</li>
+                    <li style="margin: 4px 0;">Highlight any ad tech projects</li>
+                </ul>
+
+                <div style="margin-top: 15px; display: flex; gap: 8px;">
+                    <button style="flex: 1; padding: 8px; background: #F5F3E7; color: #2d6b52; border: 1px solid #e0ddd0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">← Back</button>
+                    <a href="#" style="flex: 1; padding: 8px; background: #3d8b6e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; text-decoration: none; text-align: center; font-weight: 600;">View Job</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="max-width: 380px;">
+            <div class="preview-label">Job Item with Actions</div>
+            <div class="modal-container">
+                <div class="history-item">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="score-badge-sm" style="background: var(--dark-green);"><span>4</span></div>
+                        <div style="flex: 1;">
+                            <div class="history-title">Product Manager II, Retail Ads</div>
+                            <div class="history-company">Google - Mountain View, CA</div>
+                            <div style="color: #4a4a4a; font-size: 11px; margin-top: 2px;">Jan 12, 2025</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
+                        <select style="padding: 4px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px; background: #F5F3E7; color: #2d6b52; font-weight: 500;">
+                            <option>Scanned</option>
+                            <option selected>Interested</option>
+                            <option>Applied</option>
+                        </select>
+                        <a href="#" style="padding: 4px 10px; background: var(--dark-green); color: white; border-radius: 6px; font-size: 11px; text-decoration: none; font-weight: 600;">View Job</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interested Workflow -->
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 100%; min-width: 100%;">
+            <div class="preview-label">"Interested" Status Workflow (Full Flow)</div>
+            <div class="modal-container" style="background: #fdfcf8; border-left: 3px solid #c9a050;">
+                <div style="font-size: 13px; font-weight: 600; color: #222; margin-bottom: 10px;">Job Application Workflow:</div>
+
+                <!-- Flow diagram - 5 steps -->
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <!-- Step 1: View job & click Assess -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="background: white; border: 1px solid #e0ddd0; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                            <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Step 1</div>
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">View job page</div>
+                            <button style="padding: 4px 10px; background: #F5F3E7; color: #5a9a88; border: 1px solid #e8e6da; border-radius: 12px; font-size: 11px; font-weight: 600; cursor: pointer;">Assess</button>
+                        </div>
+                        <span style="font-size: 18px; color: var(--dark-green);">→</span>
+                    </div>
+
+                    <!-- Step 2: See fit score (saved to history) -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="background: white; border: 1px solid #e0ddd0; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                            <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Step 2</div>
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">See fit score</div>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--dark-green); display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: white; font-size: 12px; font-weight: 700;">4</span>
+                                </div>
+                                <span style="font-size: 10px; color: #888;">→ History</span>
+                            </div>
+                        </div>
+                        <span style="font-size: 18px; color: var(--dark-green);">→</span>
+                    </div>
+
+                    <!-- Step 3: Open History, select Interested -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="background: white; border: 1px solid #e0ddd0; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                            <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Step 3</div>
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">In History panel</div>
+                            <select style="padding: 4px 8px; border: 1px solid #c9a050; border-radius: 6px; font-size: 11px; background: #f5f0e0; color: #6b5a30; font-weight: 600;">
+                                <option>Scanned</option>
+                                <option selected>Interested</option>
+                                <option>Applied</option>
+                            </select>
+                        </div>
+                        <span style="font-size: 18px; color: #c9a050;">→</span>
+                    </div>
+
+                    <!-- Step 4: Auto-trigger bullet matching -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="background: #f5f0e0; border: 2px solid #c9a050; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                            <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Step 4 (Auto)</div>
+                            <div style="font-size: 12px; color: #c9a050; font-weight: 600;">Bullet Matching</div>
+                            <div style="font-size: 10px; color: #666;">opens automatically</div>
+                        </div>
+                        <span style="font-size: 18px; color: var(--dark-green);">→</span>
+                    </div>
+
+                    <!-- Step 5: Apply -->
+                    <div style="background: white; border: 1px solid #e0ddd0; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                        <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Step 5</div>
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Ready to apply!</div>
+                        <button style="padding: 6px 12px; background: var(--dark-green); color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">View Job</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; font-size: 11px; color: #666;">
+                    <strong style="color: #c9a050;">How it works:</strong> When you click "Assess" on any job page, the job is automatically saved to your History. Later, when you mark a job as "Interested" in the History panel, it automatically opens Resume Bullet Matching to help you prepare the best resume bullets for that specific role.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         6. AUTOFILL FLOW
+         ============================================ -->
+    <h2>6. Autofill Flow</h2>
+    <p class="description">Auto-triggered on application pages. Title: 13px bold. Body: 12px. Tags: 12px. Button: 12px bold.</p>
+
+    <div class="preview-row">
+        <div class="preview-box">
+            <div class="preview-label">Setup Required</div>
+            <div class="modal-container">
+                <div style="background: #fdfcf8; border: 1px solid #e0ddd0; border-left: 3px solid #F0D58C; border-radius: 5px; padding: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="font-size: 16px;">⚠️</span>
+                        <span style="font-size: 13px; font-weight: 600; color: #222;">Setup Required</span>
+                    </div>
+                    <p style="font-size: 12px; color: #4a4a4a; margin: 0 0 10px 0; line-height: 1.4;">Please configure CareerFit AI to use auto-fill features.</p>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <span class="tag">Missing: API Key</span>
+                        <span class="tag">Missing: Resume</span>
+                    </div>
+                    <button style="margin-top: 12px; background: var(--dark-green); color: white; border: none; padding: 8px 14px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer;">Open Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box">
+            <div class="preview-label">Auto-fill Success</div>
+            <div class="modal-container">
+                <div style="background: #e8f5f1; border: 1px solid #d0e8e0; border-left: 3px solid var(--dark-green); border-radius: 5px; padding: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 16px; color: var(--dark-green);">✓</span>
+                        <div>
+                            <div style="font-size: 13px; font-weight: 600; color: var(--dark-green);">Auto-filled 8 fields</div>
+                            <div style="font-size: 12px; color: #4a4a4a; margin-top: 2px;">Work authorization, contact info, EEO</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         7. OPTIONS PAGE COMPONENTS
+         ============================================ -->
+    <h2>7. Options Page Components</h2>
+    <p class="description">Settings page UI elements. Section labels: 11px uppercase #2d6b52. Values: 12px. Form labels: 12px. Input: 12px/13px.</p>
+
+    <!-- Row 1: API Key + Resume Section -->
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 400px;">
+            <div class="preview-label">API Key & Resume Input</div>
+            <div class="modal-container" style="background: #fdfcf8;">
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-weight: 600; color: #444; margin-bottom: 5px; font-size: 12px;">Gemini API Key:</label>
+                    <input type="password" value="AIzaSy...xxxxx" style="width: 100%; padding: 10px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 13px; box-sizing: border-box;" />
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-weight: 600; color: #444; margin-bottom: 5px; font-size: 12px;">Your Resume:</label>
+                    <textarea style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 13px; box-sizing: border-box; resize: none;" placeholder="Paste your resume text here..."></textarea>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button style="padding: 10px 20px; background: var(--dark-green); color: white; border: none; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Save Settings</button>
+                    <button style="padding: 10px 20px; background: var(--creamy-white); color: #2d6b52; border: 1px solid #e0ddd0; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Analyze My Resume</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="max-width: 400px;">
+            <div class="preview-label">Profile Display (after analysis)</div>
+            <div class="modal-container" style="background: white; border: 1px solid #e0ddd0;">
+                <div style="font-size: 14px; font-weight: 600; color: var(--dark-green); margin-bottom: 8px;">Your Candidate Profile</div>
+                <div style="font-size: 11px; color: #888; margin-bottom: 12px;">Analyzed Jan 12, 2025</div>
+
+                <div style="margin-bottom: 10px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Experience:</span>
+                    <span style="color: #555; font-size: 12px; margin-left: 4px;">7 years</span>
+                    <span style="margin-left: 12px; font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Level:</span>
+                    <span style="color: #555; font-size: 12px; margin-left: 4px;">Senior</span>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Functions:</span>
+                </div>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <span class="tag">Product Management</span>
+                    <span class="tag">Strategy</span>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Industries:</span>
+                </div>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    <span class="tag" style="background: #f5f0e0; color: #6b5a30; border-color: #e8e0d0;">Tech</span>
+                    <span class="tag" style="background: #f5f0e0; color: #6b5a30; border-color: #e8e0d0;">E-commerce</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Experience Card + Skills -->
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 380px;">
+            <div class="preview-label">Work History (Experience Card)</div>
+            <div class="modal-container" style="background: #fdfcf8;">
+                <!-- Experience Card -->
+                <div style="background: #fdfcf8; border: 1px solid #e0ddd0; border-left: 3px solid var(--calming-green); border-radius: 5px; padding: 10px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-weight: 600; color: #222; font-size: 12px;">Senior Product Manager</span>
+                        <span style="color: var(--dark-green); font-size: 11px; font-weight: 600;">3 years</span>
+                    </div>
+                    <div style="color: #2d6b52; font-size: 11px; margin-bottom: 4px;">Google</div>
+                    <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: #555;">
+                        <li style="margin: 2px 0;">Led product strategy for $50M revenue line</li>
+                        <li style="margin: 2px 0;">Launched ML-powered recommendation engine</li>
+                    </ul>
+                </div>
+                <div style="background: #fdfcf8; border: 1px solid #e0ddd0; border-left: 3px solid var(--calming-green); border-radius: 5px; padding: 10px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-weight: 600; color: #222; font-size: 12px;">Product Manager</span>
+                        <span style="color: var(--dark-green); font-size: 11px; font-weight: 600;">4 years</span>
+                    </div>
+                    <div style="color: #2d6b52; font-size: 11px; margin-bottom: 4px;">Meta</div>
+                    <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: #555;">
+                        <li style="margin: 2px 0;">Built ads platform serving 10M users</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="max-width: 380px;">
+            <div class="preview-label">Technical Skills (Rich Format)</div>
+            <div class="modal-container" style="background: #fdfcf8;">
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Technical Skills:</span>
+                </div>
+                <!-- Rich skill tags -->
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <div style="background: #fdfcf8; border: 1px solid #e0ddd0; border-radius: 5px; padding: 6px 10px; display: inline-block;">
+                        <span style="font-weight: 600; color: var(--dark-green); font-size: 11px;">SQL</span>
+                        <span style="color: #c9a050; font-size: 10px; margin-left: 4px; font-weight: 600;">(5y)</span>
+                        <span style="display: block; font-size: 10px; color: #666; margin-top: 2px;">Built data pipelines for 10M users</span>
+                    </div>
+                    <div style="background: #fdfcf8; border: 1px solid #e0ddd0; border-radius: 5px; padding: 6px 10px; display: inline-block;">
+                        <span style="font-weight: 600; color: var(--dark-green); font-size: 11px;">Python</span>
+                        <span style="color: #c9a050; font-size: 10px; margin-left: 4px; font-weight: 600;">(3y)</span>
+                        <span style="display: block; font-size: 10px; color: #666; margin-top: 2px;">ML models for fraud detection</span>
+                    </div>
+                </div>
+                <div style="margin-top: 12px; margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Soft Skills:</span>
+                </div>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    <span class="tag tag-ic">Leadership</span>
+                    <span class="tag tag-ic">Communication</span>
+                    <span class="tag tag-ic">Strategy</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: Achievements + Target Titles -->
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 380px;">
+            <div class="preview-label">Top Achievements</div>
+            <div class="modal-container" style="background: #fdfcf8;">
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Top Achievements:</span>
+                </div>
+                <ul style="list-style: none; padding: 0; margin: 6px 0;">
+                    <li style="background: #fdfcf8; border-left: 3px solid var(--healing-yellow); padding: 6px 10px; margin: 4px 0; font-size: 11px; border-radius: 0 5px 5px 0; color: #333;">Grew revenue from $2M to $8M in 18 months</li>
+                    <li style="background: #fdfcf8; border-left: 3px solid var(--healing-yellow); padding: 6px 10px; margin: 4px 0; font-size: 11px; border-radius: 0 5px 5px 0; color: #333;">Led team of 8 engineers across 3 time zones</li>
+                    <li style="background: #fdfcf8; border-left: 3px solid var(--healing-yellow); padding: 6px 10px; margin: 4px 0; font-size: 11px; border-radius: 0 5px 5px 0; color: #333;">Launched product to 10M users in 6 months</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="preview-box" style="max-width: 380px;">
+            <div class="preview-label">Target Titles + Search Queries</div>
+            <div class="modal-container" style="background: #fdfcf8;">
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Target Job Titles:</span>
+                </div>
+                <ul style="margin: 5px 0 12px 0; padding-left: 18px; font-size: 12px;">
+                    <li style="margin: 3px 0;">Product Manager</li>
+                    <li style="margin: 3px 0;">Senior Product Manager</li>
+                    <li style="margin: 3px 0;">Staff PM</li>
+                </ul>
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #2d6b52; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Search Queries:</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin: 6px 0;">
+                    <span style="font-size: 12px; flex: 1;">product manager ads</span>
+                    <button style="padding: 3px 8px; background: #0a66c2; color: white; border: none; border-radius: 4px; font-size: 10px; cursor: pointer;">Copy</button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin: 6px 0;">
+                    <span style="font-size: 12px; flex: 1;">PM e-commerce retail</span>
+                    <button style="padding: 3px 8px; background: #0a66c2; color: white; border: none; border-radius: 4px; font-size: 10px; cursor: pointer;">Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4: Hard Filters -->
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 400px;">
+            <div class="preview-label">Hard Filters Section</div>
+            <div class="modal-container" style="background: white; border: 1px solid #e0ddd0;">
+                <div style="font-size: 14px; font-weight: 600; color: #c9a050; margin-bottom: 8px;">Hard Filters</div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 12px;">Auto-skip jobs that match these criteria:</div>
+
+                <div style="display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 12px;">
+                    <input type="checkbox" checked style="accent-color: var(--dark-green);">
+                    <label>Skip jobs requiring more than</label>
+                    <input type="number" value="10" style="width: 50px; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 12px;">
+                    <label>years experience</label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 12px;">
+                    <input type="checkbox" checked style="accent-color: var(--dark-green);">
+                    <label>Skip jobs requiring PhD</label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 12px;">
+                    <input type="checkbox" checked style="accent-color: var(--dark-green);">
+                    <label>Skip Director level and above</label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 12px;">
+                    <label style="min-width: 140px;">Exclude companies:</label>
+                    <input type="text" value="Amazon, Oracle" style="flex: 1; padding: 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 12px;">
+                </div>
+                <button style="margin-top: 10px; padding: 10px 20px; background: #c9a050; color: white; border: none; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Save Filters</button>
+            </div>
+        </div>
+
+        <div class="preview-box" style="max-width: 400px;">
+            <div class="preview-label">Cloud Sync (Firebase)</div>
+            <div class="modal-container" style="background: #fdfcf8; border: 1px solid #e8e0d0; border-left: 3px solid var(--healing-yellow);">
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 14px; font-weight: 600; color: #6b5a30;">Cloud Sync (Firebase)</span>
+                    <span style="display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 10px; background: #e8f5f1; color: var(--dark-green);">Connected</span>
+                </div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Sync your job history to the cloud.</div>
+                <label style="display: block; font-weight: 600; color: #444; margin-bottom: 5px; font-size: 12px;">Firebase Config (JSON):</label>
+                <textarea style="width: 100%; height: 60px; padding: 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px; font-family: monospace; box-sizing: border-box; resize: none;" placeholder='{"apiKey": "...", "projectId": "..."}'></textarea>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button style="padding: 8px 16px; background: var(--healing-yellow); color: #5a4a20; border: none; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Connect</button>
+                    <button style="padding: 8px 16px; background: var(--dark-green); color: white; border: none; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer;">Sync Now</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 5: Autofill Groups -->
+    <div class="preview-row">
+        <div class="preview-box" style="max-width: 400px;">
+            <div class="preview-label">Autofill Section (Work Auth + Experience)</div>
+            <div class="modal-container" style="background: #e8f5f1; border: 1px solid #d0e8e0;">
+                <div style="font-size: 13px; font-weight: 600; color: var(--dark-green); margin-bottom: 8px;">Application Auto-Fill</div>
+                <div style="font-size: 11px; color: #666; margin-bottom: 10px;">Auto-fill on Workday, Greenhouse, Lever forms.</div>
+
+                <!-- Work Authorization Group -->
+                <div style="background: white; border-radius: 5px; border: 1px solid #e0ddd0; padding: 10px; margin-bottom: 8px;">
+                    <label style="display: block; font-weight: 600; color: #2d6b52; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Work Authorization</label>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 6px;">
+                        <label style="min-width: 130px; font-size: 11px; color: #333;">Authorized to work in US?</label>
+                        <select style="padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px; width: 100px;">
+                            <option selected>Yes</option>
+                            <option>No</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
+                        <label style="min-width: 130px; font-size: 11px; color: #333;">Require sponsorship?</label>
+                        <select style="padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px; width: 100px;">
+                            <option>Yes</option>
+                            <option selected>No</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Experience Group -->
+                <div style="background: white; border-radius: 5px; border: 1px solid #e0ddd0; padding: 10px;">
+                    <label style="display: block; font-weight: 600; color: #2d6b52; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Experience</label>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 6px;">
+                        <label style="min-width: 130px; font-size: 11px; color: #333;">Years of experience:</label>
+                        <input type="number" value="7" style="width: 60px; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
+                        <label style="min-width: 130px; font-size: 11px; color: #333;">Current job title:</label>
+                        <input type="text" value="Product Manager" style="flex: 1; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="max-width: 400px;">
+            <div class="preview-label">Autofill Section (Personal + Diversity)</div>
+            <div class="modal-container" style="background: #e8f5f1; border: 1px solid #d0e8e0;">
+                <!-- Personal Info Group -->
+                <div style="background: white; border-radius: 5px; border: 1px solid #e0ddd0; padding: 10px; margin-bottom: 8px;">
+                    <label style="display: block; font-weight: 600; color: #2d6b52; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Personal Info</label>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 6px;">
+                        <label style="min-width: 80px; font-size: 11px; color: #333;">Full name:</label>
+                        <input type="text" value="John Doe" style="flex: 1; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 6px;">
+                        <label style="min-width: 80px; font-size: 11px; color: #333;">Email:</label>
+                        <input type="email" value="john@example.com" style="flex: 1; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
+                        <label style="min-width: 80px; font-size: 11px; color: #333;">LinkedIn:</label>
+                        <input type="url" value="linkedin.com/in/johndoe" style="flex: 1; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px;">
+                    </div>
+                </div>
+
+                <!-- Diversity Group -->
+                <div style="background: white; border-radius: 5px; border: 1px solid #e0ddd0; padding: 10px;">
+                    <label style="display: block; font-weight: 600; color: #2d6b52; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Diversity (Optional)</label>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 6px;">
+                        <label style="min-width: 80px; font-size: 11px; color: #333;">Gender:</label>
+                        <select style="width: 150px; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px;">
+                            <option selected>Decline to state</option>
+                            <option>Male</option>
+                            <option>Female</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
+                        <label style="min-width: 80px; font-size: 11px; color: #333;">Veteran:</label>
+                        <select style="width: 150px; padding: 5px 8px; border: 1px solid #e0ddd0; border-radius: 6px; font-size: 11px;">
+                            <option selected>Decline to state</option>
+                            <option>Veteran</option>
+                            <option>Not a veteran</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button style="margin-top: 10px; padding: 8px 16px; background: var(--dark-green); color: white; border: none; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer;">Save Auto-Fill Answers</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         8. DESIGN REFERENCE
+         ============================================ -->
+    <h2>8. Design Reference</h2>
+    <p class="description">Score badge sizes and color palette for reference.</p>
+
+    <h3 style="font-size: 14px; color: #666; margin-top: 20px;">Score Variations</h3>
+    <p class="description">Badge: 38px circle. Number: 18px bold white. Label: 11px uppercase #222. Text: 14px bold. Green #3d8b6e (4-5), Orange #c9a050 (3), Grey #4a4a4a (1-2).</p>
+
+    <div class="preview-row">
+        <div class="preview-box" style="min-width: 150px; max-width: 180px;">
+            <div class="preview-label">Score 5</div>
+            <div class="modal-container">
+                <div class="score-section" style="border: none; padding: 0; margin: 0;">
+                    <div class="score-badge" style="background: var(--dark-green);"><span>5</span></div>
+                    <div>
+                        <div class="score-label">Fit Score</div>
+                        <div class="score-text">Great Match</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="min-width: 150px; max-width: 180px;">
+            <div class="preview-label">Score 4</div>
+            <div class="modal-container">
+                <div class="score-section" style="border: none; padding: 0; margin: 0;">
+                    <div class="score-badge" style="background: var(--dark-green);"><span>4</span></div>
+                    <div>
+                        <div class="score-label">Fit Score</div>
+                        <div class="score-text">Great Match</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="min-width: 150px; max-width: 180px;">
+            <div class="preview-label">Score 3</div>
+            <div class="modal-container">
+                <div class="score-section" style="border: none; padding: 0; margin: 0;">
+                    <div class="score-badge" style="background: #c9a050;"><span>3</span></div>
+                    <div>
+                        <div class="score-label">Fit Score</div>
+                        <div class="score-text" style="color: #c9a050;">Good Match</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="min-width: 150px; max-width: 180px;">
+            <div class="preview-label">Score 2</div>
+            <div class="modal-container">
+                <div class="score-section" style="border: none; padding: 0; margin: 0;">
+                    <div class="score-badge" style="background: #4a4a4a;"><span>2</span></div>
+                    <div>
+                        <div class="score-label">Fit Score</div>
+                        <div class="score-text" style="color: #4a4a4a;">Stretch</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-box" style="min-width: 150px; max-width: 180px;">
+            <div class="preview-label">Score 1</div>
+            <div class="modal-container">
+                <div class="score-section" style="border: none; padding: 0; margin: 0;">
+                    <div class="score-badge" style="background: #4a4a4a;"><span>1</span></div>
+                    <div>
+                        <div class="score-label">Fit Score</div>
+                        <div class="score-text" style="color: #4a4a4a;">Low Match</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h3 style="font-size: 14px; color: #666; margin-top: 20px;">Color Palette</h3>
+    <p class="description">WGSN 2025 trend palette. Primary: Dark Green #3d8b6e. Secondary: Orange #c9a050. Neutral: Grey #4a4a4a. Backgrounds: Creamy White #F5F3E7, #fdfcf8.</p>
+
+    <div class="preview-row">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; background: #3d8b6e; border-radius: 8px;"></div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Dark Green<br>#3d8b6e</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; background: #9DC3B5; border-radius: 8px;"></div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Calming Green<br>#9DC3B5</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; background: #F5F3E7; border-radius: 8px; border: 1px solid #e0ddd0;"></div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Creamy White<br>#F5F3E7</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; background: #F0D58C; border-radius: 8px;"></div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Healing Yellow<br>#F0D58C</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; background: #c9a050; border-radius: 8px;"></div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Orange<br>#c9a050</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; background: #4a4a4a; border-radius: 8px;"></div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Grey<br>#4a4a4a</div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+
+    <script>
+        // Tab switching for mock preview
+        document.querySelectorAll('.mock-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Reset all tabs
+                document.querySelectorAll('.mock-tab').forEach(t => {
+                    t.style.borderBottomColor = 'transparent';
+                    t.style.color = '#666';
+                });
+                // Hide all panels
+                document.querySelectorAll('.mock-panel').forEach(p => {
+                    p.style.display = 'none';
+                });
+                // Activate clicked tab - black text, green underline
+                tab.style.borderBottomColor = '#3d8b6e';
+                tab.style.color = '#222';
+                // Show corresponding panel
+                const panelId = tab.dataset.panel;
+                document.getElementById(panelId).style.display = 'block';
+            });
+        });
+    </script>
+
+</body>
+</html>

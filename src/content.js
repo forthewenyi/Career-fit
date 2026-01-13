@@ -1,138 +1,17 @@
 console.log('CareerFit: Content script loaded');
 console.log('CareerFit: Current URL:', window.location.href);
 
-// --- Site Configuration for Job Extraction ---
-const SITE_CONFIGS = {
-    'indeed.com': {
-        isSearchPage: (url) => url.includes('/jobs') || url.includes('q='),
-        jobCards: '.jobsearch-ResultsList > li, .job_seen_beacon, .resultContent',
-        title: '.jobTitle, [data-testid="jobTitle"], .jobTitle-color-purple > span',
-        company: '.companyName, [data-testid="company-name"], .company_location .companyName',
-        location: '.companyLocation, [data-testid="text-location"]',
-        posted: '.date, .myJobsState',
-        link: 'a[data-jk], .jobTitle a, a.jcs-JobTitle',
-    },
-    'student.interstride.com': {
-        isSearchPage: (url) => url.includes('/jobs') && !url.match(/\/jobs\/\d+$/),
-        // Interstride job listings - may need tuning based on actual search page HTML
-        jobCards: '.employer-job, [class*="job-card"], [class*="JobCard"], .job-listing, [class*="JobListItem"], .card[class*="job"]',
-        title: '.employer-job-details-title-heading, [class*="job-title"], [class*="JobTitle"], h3, h4',
-        company: '.company-card-name-text, [class*="company-name"], [class*="CompanyName"], [class*="employer-name"]',
-        location: '.employer-job-details-middle-left-details-line-data, [class*="location"], [class*="Location"]',
-        posted: '.employer-job-details-footer-posted, [class*="posted"], [class*="date"], time',
-        link: 'a[href*="/jobs/"]',
-    },
-    'linkedin.com': {
-        isSearchPage: (url) => url.includes('/jobs/search') || url.includes('/jobs/collections'),
-        jobCards: '.jobs-search-results__list-item, .job-card-container, .jobs-search-results-list__list-item',
-        title: '.job-card-list__title, .job-card-container__link, .artdeco-entity-lockup__title',
-        company: '.job-card-container__company-name, .artdeco-entity-lockup__subtitle',
-        location: '.job-card-container__metadata-item, .artdeco-entity-lockup__caption',
-        posted: 'time',
-        link: 'a.job-card-container__link, a.job-card-list__title',
-    },
-    'greenhouse.io': {
-        isSearchPage: (url) => url.includes('/jobs') || url.includes('/careers'),
-        jobCards: '.opening, [class*="job-post"], [class*="career"]',
-        title: 'a, .job-title, h3',
-        company: '.company-name, .department',
-        location: '.location',
-        posted: '.posted-date',
-        link: 'a',
-    },
-    'lever.co': {
-        isSearchPage: (url) => url.includes('/jobs'),
-        jobCards: '.posting, [class*="posting"]',
-        title: '.posting-title h5, .posting-name',
-        company: '.posting-categories .sort-by-team',
-        location: '.posting-categories .sort-by-location',
-        posted: '.posting-date',
-        link: 'a.posting-title',
-    }
-};
-
-// --- Anti-bot Delays ---
-const DELAYS = {
-    betweenJobs: () => 4000 + Math.random() * 8000,  // 4-12 seconds
-    maxJobsPerScan: 20,
-    scrollPause: () => 500 + Math.random() * 1000
-};
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// --- Site Detection ---
-function getSiteConfig() {
-    const host = window.location.hostname;
-    for (const [domain, config] of Object.entries(SITE_CONFIGS)) {
-        if (host.includes(domain)) return { domain, ...config };
-    }
-    return null;
-}
-
-function isOnSearchResultsPage() {
-    const config = getSiteConfig();
-    if (!config) return false;
-    return config.isSearchPage(window.location.href);
-}
-
-// --- Job Extraction ---
-function extractJobListings() {
-    const config = getSiteConfig();
-    if (!config) {
-        console.log('CareerFit: No site config for', window.location.hostname);
-        return [];
-    }
-
-    const jobs = [];
-    const cards = document.querySelectorAll(config.jobCards);
-    console.log('CareerFit: Found', cards.length, 'job cards using selector:', config.jobCards);
-
-    cards.forEach((card, index) => {
-        const titleEl = card.querySelector(config.title);
-        const companyEl = card.querySelector(config.company);
-        const locationEl = card.querySelector(config.location);
-        const postedEl = card.querySelector(config.posted);
-        const linkEl = card.querySelector(config.link);
-
-        const title = titleEl?.textContent?.trim();
-        const company = companyEl?.textContent?.trim();
-        const location = locationEl?.textContent?.trim();
-        const posted = postedEl?.textContent?.trim();
-        const link = linkEl?.href || window.location.href;
-
-        if (title) {
-            jobs.push({
-                index,
-                title,
-                company: company || 'Unknown',
-                location: location || '',
-                posted: posted || '',
-                link,
-                element: card
-            });
-        }
-    });
-
-    console.log('CareerFit: Extracted', jobs.length, 'jobs with titles');
-    return jobs;
-}
-
 // --- 1. Create and inject the buttons ---
 const buttonContainer = document.createElement('div');
 buttonContainer.id = 'careerfit-buttons';
 
-// Check if we're on a search results page to show Scan Jobs button
-const onSearchPage = isOnSearchResultsPage();
-console.log('CareerFit: On search results page:', onSearchPage);
-
 buttonContainer.innerHTML = `
     <span id="cf-drag-handle">⋮⋮</span>
     <button id="cf-minimize-btn" title="Minimize">−</button>
-    ${onSearchPage ? '<button id="scan-jobs-btn" class="cf-action-btn">Scan</button>' : ''}
     <button id="summarize-btn" class="cf-action-btn">Summarize</button>
     <button id="assess-btn" class="cf-action-btn">Assess</button>
+    <button id="autofill-btn" class="cf-action-btn">Auto-fill</button>
+    <button id="history-btn" class="cf-action-btn">History</button>
 `;
 document.body.appendChild(buttonContainer);
 
@@ -198,10 +77,29 @@ modal.innerHTML = `
 `;
 document.body.appendChild(modal);
 
-// --- 3. Handle close button click ---
-document.addEventListener('click', (event) => {
+// --- 3. Handle close button click and save skill buttons ---
+document.addEventListener('click', async (event) => {
     if (event.target.id === 'close-modal') {
         modal.style.display = 'none';
+    }
+
+    // Handle save skill button clicks
+    if (event.target.classList.contains('save-skill-btn')) {
+        const btn = event.target;
+        const skill = btn.dataset.skill;
+        const resources = btn.dataset.resources || '';
+        const keywords = btn.dataset.keywords ? btn.dataset.keywords.split(',').filter(k => k) : [];
+
+        if (skill) {
+            await saveSkillToLearn({ skill, resources, keywords });
+            // Visual feedback - change to checkmark
+            btn.textContent = '✓';
+            btn.style.background = '#3d8b6e';
+            btn.style.color = 'white';
+            btn.style.borderColor = '#3d8b6e';
+            btn.disabled = true;
+            btn.title = 'Saved!';
+        }
     }
 });
 
@@ -304,7 +202,17 @@ function showError(text) {
 }
 
 // --- 4. Handle Summarize Role button click ---
-document.getElementById('summarize-btn').addEventListener('click', () => {
+document.getElementById('summarize-btn').addEventListener('click', async () => {
+    // First, check if we have cached summary for this job
+    const jobInfo = extractCurrentJobInfo();
+    const cachedResult = await getCachedSummary(jobInfo);
+
+    if (cachedResult) {
+        console.log('CareerFit: Found cached summary for:', jobInfo.title);
+        showCachedSummary(cachedResult);
+        return;
+    }
+
     showLoading('Analyzing role...');
 
     const jobText = getJobText();
@@ -379,6 +287,18 @@ async function getCachedAssessment(jobInfo) {
     return cached;
 }
 
+// --- Check for cached summary ---
+async function getCachedSummary(jobInfo) {
+    if (!jobInfo.title) return null;
+
+    const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
+    const jobId = btoa(`${jobInfo.title}|${jobInfo.company || 'Unknown'}|${window.location.href}`).slice(0, 32);
+
+    // Look for job with summary data (yearsRequired is a good indicator)
+    const cached = jobHistory.find(j => j.id === jobId && j.summary && j.summary.yearsRequired);
+    return cached;
+}
+
 // --- Display cached assessment ---
 function showCachedAssessment(cachedJob) {
     modal.style.display = 'block';
@@ -388,80 +308,79 @@ function showCachedAssessment(cachedJob) {
     const summary = cachedJob.summary || {};
     const fitScore = analysis.fitScore;
 
-    let scoreColor = '#9e9e9e';
-    if (fitScore >= 4) scoreColor = '#4caf50';
-    else if (fitScore >= 3) scoreColor = '#ff9800';
-    else if (fitScore >= 2) scoreColor = '#ff5722';
-    else if (fitScore >= 1) scoreColor = '#f44336';
+    // Option B: Green + Cream Hybrid colors
+    let scoreColor = '#4a4a4a';
+    if (fitScore >= 4) scoreColor = '#3d8b6e';
+    else if (fitScore >= 3) scoreColor = '#c9a050';
 
-    const scannedDate = new Date(cachedJob.scannedAt).toLocaleDateString();
+    const scannedDate = new Date(cachedJob.scannedAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
     const years = summary.yearsRequired || 'Not specified';
     const managerType = summary.managerType || '';
     const func = summary.function || '';
     const uniqueReqs = summary.uniqueRequirements || [];
 
-    let html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5;">`;
+    // Option B: 12px font, 1.35 line-height
+    let html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; line-height: 1.35;">`;
 
-    // Cached banner
+    // Cached banner - Option B: Creamy white with green text
     html += `
-        <div style="background: #fff3e0; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; font-size: 11px; color: #e65100; display: flex; justify-content: space-between; align-items: center;">
-            <span>📋 Cached from ${scannedDate}</span>
-            <button id="refresh-assess" style="background: #ff9800; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Refresh</button>
+        <div style="background: #F5F3E7; padding: 4px 8px; border-radius: 5px; margin-bottom: 8px; font-size: 10px; color: #2d6b52; border: 1px solid #e0ddd0; display: flex; justify-content: space-between; align-items: center;">
+            <span>Cached ${scannedDate}</span>
+            <button id="refresh-assess" style="background: #3d8b6e; color: white; border: none; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: 500;">Refresh</button>
         </div>
     `;
 
-    // Score badge
+    // Score badge - Option B: 38px badge
     html += `
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #eee;">
-            <div style="width: 56px; height: 56px; border-radius: 50%; background: ${scoreColor}; display: flex; align-items: center; justify-content: center;">
-                <span style="color: white; font-size: 24px; font-weight: 700;">${fitScore}</span>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: ${scoreColor}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <span style="color: white; font-size: 18px; font-weight: 700;">${fitScore}</span>
             </div>
             <div>
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">Fit Score</div>
-                <div style="font-size: 18px; font-weight: 600; color: ${scoreColor};">${fitScore >= 4 ? 'Great Match' : fitScore >= 3 ? 'Good Match' : fitScore >= 2 ? 'Stretch' : 'Low Match'}</div>
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">Fit Score</div>
+                <div style="font-size: 14px; font-weight: 600; color: ${scoreColor};">${fitScore >= 4 ? 'Great Match' : fitScore >= 3 ? 'Good Match' : fitScore >= 2 ? 'Stretch' : 'Low Match'}</div>
             </div>
         </div>
     `;
 
-    // Role basics
+    // Role basics - Option B: Creamy white tags
     html += `
-        <div style="margin-bottom: 16px;">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-                <span style="background: #e3f2fd; color: #1565c0; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${years}</span>
-                ${managerType ? `<span style="background: ${managerType === 'People Manager' ? '#f3e5f5' : '#e8f5e9'}; color: ${managerType === 'People Manager' ? '#7b1fa2' : '#2e7d32'}; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;">${managerType}</span>` : ''}
+        <div style="margin-bottom: 8px;">
+            <div style="display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 3px;">
+                <span style="background: #F5F3E7; color: #2d6b52; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid #e0ddd0;">${years}</span>
+                ${managerType ? `<span style="background: ${managerType === 'People Manager' ? '#f5f0e0' : '#e8f5f1'}; color: ${managerType === 'People Manager' ? '#6b5a30' : '#2d6b52'}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid ${managerType === 'People Manager' ? '#e8e0d0' : '#d0e8e0'};">${managerType}</span>` : ''}
             </div>
-            ${func ? `<p style="margin: 0; font-size: 14px; color: #555;">${func}</p>` : ''}
+            ${func ? `<p style="margin: 3px 0 0 0; font-size: 12px; color: #444; line-height: 1.35;">${func}</p>` : ''}
         </div>
     `;
 
-    // Role requirements
+    // Role requirements - Option B: tighter spacing
     if (uniqueReqs.length > 0) {
         html += `
-            <div style="margin-bottom: 16px;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px;">Role Looking For</div>
+            <div style="margin-bottom: 8px;">
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #2d6b52; margin-bottom: 4px; font-weight: 600;">Looking For</div>
                 <ul style="margin: 0; padding-left: 16px;">
-                    ${uniqueReqs.map(req => `<li style="font-size: 13px; color: #333; margin-bottom: 4px;">${req}</li>`).join('')}
+                    ${uniqueReqs.map(req => `<li style="font-size: 12px; color: #333; margin-bottom: 2px;">${req}</li>`).join('')}
                 </ul>
             </div>
         `;
     }
 
-    // Gaps with learning resources
+    // Gaps - Option B: Yellow left border, cream background
     const gaps = analysis.gaps || [];
     if (gaps.length > 0) {
         html += `
-            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #e65100; margin-bottom: 10px;">Gaps</div>
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #2d6b52; margin-bottom: 4px; font-weight: 600;">Skills to Develop</div>
                 ${gaps.map(gap => {
                     if (typeof gap === 'string') {
-                        return `<div style="background: #fff8e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
-                            <div style="font-size: 13px; font-weight: 600; color: #333;">${gap}</div>
+                        return `<div style="background: #fdfcf8; border-radius: 5px; padding: 6px 8px; margin-bottom: 4px; border-left: 3px solid #F0D58C;">
+                            <div style="font-size: 12px; font-weight: 600; color: #333;">${gap}</div>
                         </div>`;
                     }
-                    return `<div style="background: #fff8e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
-                        <div style="font-size: 13px; font-weight: 600; color: #333;">${gap.skill || gap}</div>
-                        ${gap.resources ? `<div style="font-size: 12px; color: #555; margin: 4px 0;">Learn: ${gap.resources}</div>` : ''}
-                        ${gap.funFact ? `<div style="font-size: 11px; color: #888; font-style: italic;">${gap.funFact}</div>` : ''}
+                    return `<div style="background: #fdfcf8; border-radius: 5px; padding: 6px 8px; margin-bottom: 4px; border-left: 3px solid #F0D58C;">
+                        <div style="font-size: 12px; font-weight: 600; color: #333;">${gap.skill || gap}</div>
+                        ${gap.resources ? `<div style="font-size: 11px; color: #555; margin-top: 1px;">${gap.resources}</div>` : ''}
                     </div>`;
                 }).join('')}
             </div>
@@ -477,6 +396,69 @@ function showCachedAssessment(cachedJob) {
         const jobText = getJobText();
         if (jobText) {
             chrome.runtime.sendMessage({ type: 'analyzeJobHtml', text: jobText });
+        } else {
+            showError('Could not find job details on this page.');
+        }
+    });
+}
+
+// --- Display cached summary ---
+function showCachedSummary(cachedJob) {
+    modal.style.display = 'block';
+    const modalContent = document.getElementById('assess-modal-content');
+
+    const summary = cachedJob.summary || {};
+    const scannedDate = new Date(cachedJob.scannedAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+    const years = summary.yearsRequired || 'Not specified';
+    const managerType = summary.managerType || '';
+    const func = summary.function || '';
+    const uniqueReqs = summary.uniqueRequirements || [];
+
+    // Option B: 12px font, 1.35 line-height
+    let html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; line-height: 1.35;">`;
+
+    // Cached banner - Option B: Creamy white with green text
+    html += `
+        <div style="background: #F5F3E7; padding: 4px 8px; border-radius: 5px; margin-bottom: 8px; font-size: 10px; color: #2d6b52; border: 1px solid #e0ddd0; display: flex; justify-content: space-between; align-items: center;">
+            <span>Cached ${scannedDate}</span>
+            <button id="refresh-summary" style="background: #3d8b6e; color: white; border: none; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: 500;">Refresh</button>
+        </div>
+    `;
+
+    // Role basics - Option B: Creamy white tags
+    html += `
+        <div style="margin-bottom: 8px;">
+            <div style="display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 3px;">
+                <span style="background: #F5F3E7; color: #2d6b52; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid #e0ddd0;">${years}</span>
+                ${managerType ? `<span style="background: ${managerType === 'People Manager' ? '#f5f0e0' : '#e8f5f1'}; color: ${managerType === 'People Manager' ? '#6b5a30' : '#2d6b52'}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid ${managerType === 'People Manager' ? '#e8e0d0' : '#d0e8e0'};">${managerType}</span>` : ''}
+            </div>
+            ${func ? `<p style="margin: 3px 0 0 0; font-size: 12px; color: #444; line-height: 1.35;">${func}</p>` : ''}
+        </div>
+    `;
+
+    // Role requirements - Option B: tighter spacing
+    if (uniqueReqs.length > 0) {
+        html += `
+            <div style="margin-bottom: 8px;">
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #2d6b52; margin-bottom: 4px; font-weight: 600;">Looking For</div>
+                <ul style="margin: 0; padding-left: 16px;">
+                    ${uniqueReqs.map(req => `<li style="font-size: 12px; color: #333; margin-bottom: 2px;">${req}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else {
+        html += `<p style="color: #888; font-style: italic; font-size: 11px;">Standard role - no specific requirements</p>`;
+    }
+
+    html += `</div>`;
+    modalContent.innerHTML = html;
+
+    // Add refresh button handler
+    document.getElementById('refresh-summary')?.addEventListener('click', () => {
+        showLoading('Refreshing summary...');
+        const jobText = getJobText();
+        if (jobText) {
+            chrome.runtime.sendMessage({ type: 'summarizeRole', text: jobText });
         } else {
             showError('Could not find job details on this page.');
         }
@@ -501,9 +483,6 @@ chrome.runtime.onMessage.addListener((message) => {
         }
     } else if (message.type === 'analysisError') {
         modalContent.innerHTML = `<p style="color:red;">${message.error}</p>`;
-    } else if (message.type === 'scoreJobResult') {
-        // Handle individual job score result during batch scan
-        handleScoreResult(message);
     }
 });
 
@@ -696,390 +675,11 @@ function extractFromJsonLd() {
     return { title, company, location };
 }
 
-// --- Phase 4: Quick Filter (No API call - fast pre-screening) ---
-function quickFilter(job, candidateProfile, hardFilters) {
-    const titleLower = job.title.toLowerCase();
-    const companyLower = (job.company || '').toLowerCase();
-
-    // Check excluded companies
-    if (hardFilters?.excludeCompanies?.length) {
-        const excluded = hardFilters.excludeCompanies.some(c =>
-            companyLower.includes(c.toLowerCase())
-        );
-        if (excluded) return { pass: false, reason: 'Excluded company' };
-    }
-
-    // Check excluded titles (Director, VP, etc.)
-    if (hardFilters?.skipDirectorPlus) {
-        const seniorTitles = ['director', 'vp', 'vice president', 'head of', 'chief', 'cto', 'cfo', 'ceo', 'coo'];
-        const isTooSenior = seniorTitles.some(t => titleLower.includes(t));
-        if (isTooSenior) return { pass: false, reason: 'Too senior (Director+)' };
-    }
-
-    // Check for PhD requirement in title (rough check)
-    if (hardFilters?.skipPhD) {
-        if (titleLower.includes('phd') || titleLower.includes('ph.d')) {
-            return { pass: false, reason: 'PhD required' };
-        }
-    }
-
-    // Check if title roughly matches any target title
-    if (candidateProfile?.targetTitles?.length) {
-        const titleMatch = candidateProfile.targetTitles.some(targetTitle => {
-            const targetLower = targetTitle.toLowerCase();
-            // Check for partial matches (e.g., "product manager" matches "senior product manager")
-            const targetWords = targetLower.split(/\s+/);
-            return targetWords.some(word => word.length > 3 && titleLower.includes(word));
-        });
-        if (!titleMatch) return { pass: false, reason: 'Title mismatch' };
-    }
-
-    return { pass: true, reason: 'Passed quick filter' };
-}
-
-// --- Phase 3: Handle Scan Jobs Button Click ---
-let scanState = {
-    isScanning: false,
-    jobs: [],
-    results: [],
-    currentIndex: 0
-};
-
-async function handleScanJobs() {
-    if (scanState.isScanning) {
-        console.log('CareerFit: Scan already in progress');
-        return;
-    }
-
-    const jobs = extractJobListings();
-
-    if (jobs.length === 0) {
-        showError('No job listings found on this page. Make sure you\'re on a job search results page.');
-        modal.style.display = 'block';
-        return;
-    }
-
-    showLoading(`Found ${jobs.length} jobs. Loading your profile...`);
-
-    // Get profile and filters from storage
-    const data = await safeStorageGet(['candidateProfile', 'hardFilters']);
-
-    if (!data.candidateProfile) {
-        showError('Please analyze your resume first in the extension options (right-click extension icon → Options).');
-        return;
-    }
-
-    const { candidateProfile, hardFilters } = data;
-
-    showLoading(`Running quick filter on ${jobs.length} jobs...`);
-
-    // Run quick filter (no API calls)
-    const filtered = jobs.map(job => ({
-        ...job,
-        quickResult: quickFilter(job, candidateProfile, hardFilters)
-    }));
-
-    const passed = filtered.filter(j => j.quickResult.pass);
-    const skipped = filtered.filter(j => !j.quickResult.pass);
-
-    console.log('CareerFit: Quick filter results - Passed:', passed.length, 'Skipped:', skipped.length);
-
-    // Highlight jobs on page
-    skipped.forEach(j => {
-        if (j.element) {
-            j.element.style.opacity = '0.3';
-            j.element.style.transition = 'opacity 0.3s';
-        }
-    });
-    passed.forEach(j => {
-        if (j.element) {
-            j.element.style.borderLeft = '4px solid #4caf50';
-            j.element.style.transition = 'border 0.3s';
-        }
-    });
-
-    // If no jobs passed quick filter, show summary
-    if (passed.length === 0) {
-        displayQuickFilterResults(passed, skipped);
-        return;
-    }
-
-    // Ask user if they want to run full AI scoring
-    displayQuickFilterWithScoreOption(passed, skipped, candidateProfile);
-}
-
-function displayQuickFilterResults(passed, skipped) {
-    const modalContent = document.getElementById('assess-modal-content');
-    modalContent.innerHTML = `
-        <h4 style="margin-top: 0;">Quick Scan Complete</h4>
-        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-            <div style="flex: 1; text-align: center; padding: 15px; background: #e8f5e9; border-radius: 8px;">
-                <div style="font-size: 24px; font-weight: bold; color: #4caf50;">${passed.length}</div>
-                <div style="font-size: 12px; color: #666;">Potential Matches</div>
-            </div>
-            <div style="flex: 1; text-align: center; padding: 15px; background: #ffebee; border-radius: 8px;">
-                <div style="font-size: 24px; font-weight: bold; color: #f44336;">${skipped.length}</div>
-                <div style="font-size: 12px; color: #666;">Filtered Out</div>
-            </div>
-        </div>
-        ${passed.length === 0 ? '<p style="color: #666;">No jobs matched your profile and filters. Try adjusting your hard filters in the extension options.</p>' : ''}
-        ${skipped.length > 0 ? `
-            <details style="margin-top: 10px;">
-                <summary style="cursor: pointer; color: #666; font-size: 13px;">Why were jobs filtered out?</summary>
-                <ul style="font-size: 12px; color: #888; margin-top: 8px;">
-                    ${skipped.slice(0, 5).map(j => `<li>${j.title} - ${j.quickResult.reason}</li>`).join('')}
-                    ${skipped.length > 5 ? `<li>...and ${skipped.length - 5} more</li>` : ''}
-                </ul>
-            </details>
-        ` : ''}
-    `;
-    modal.style.display = 'block';
-}
-
-function displayQuickFilterWithScoreOption(passed, skipped, candidateProfile) {
-    const modalContent = document.getElementById('assess-modal-content');
-    const jobsToScore = Math.min(passed.length, DELAYS.maxJobsPerScan);
-    const estimatedTime = Math.ceil((jobsToScore * 8) / 60); // ~8 seconds average per job
-
-    modalContent.innerHTML = `
-        <h4 style="margin-top: 0;">Quick Scan Complete</h4>
-        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-            <div style="flex: 1; text-align: center; padding: 15px; background: #e8f5e9; border-radius: 8px;">
-                <div style="font-size: 24px; font-weight: bold; color: #4caf50;">${passed.length}</div>
-                <div style="font-size: 12px; color: #666;">Potential Matches</div>
-            </div>
-            <div style="flex: 1; text-align: center; padding: 15px; background: #ffebee; border-radius: 8px;">
-                <div style="font-size: 24px; font-weight: bold; color: #f44336;">${skipped.length}</div>
-                <div style="font-size: 12px; color: #666;">Filtered Out</div>
-            </div>
-        </div>
-        <p style="margin: 15px 0; font-size: 13px;">Matches (highlighted green on page):</p>
-        <ul style="font-size: 13px; max-height: 150px; overflow-y: auto; margin: 0; padding-left: 20px;">
-            ${passed.slice(0, 10).map(j => `<li style="margin: 4px 0;"><strong>${j.title}</strong> - ${j.company}</li>`).join('')}
-            ${passed.length > 10 ? `<li>...and ${passed.length - 10} more</li>` : ''}
-        </ul>
-        <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
-        <p style="font-size: 13px; color: #666;">Run AI scoring on ${jobsToScore} jobs? (~${estimatedTime} min)</p>
-        <button id="run-full-scoring" style="width: 100%; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px;">
-            Score Jobs with AI
-        </button>
-        ${skipped.length > 0 ? `
-            <details style="margin-top: 15px;">
-                <summary style="cursor: pointer; color: #666; font-size: 13px;">Filtered out jobs</summary>
-                <ul style="font-size: 12px; color: #888; margin-top: 8px;">
-                    ${skipped.slice(0, 5).map(j => `<li>${j.title} - ${j.quickResult.reason}</li>`).join('')}
-                    ${skipped.length > 5 ? `<li>...and ${skipped.length - 5} more</li>` : ''}
-                </ul>
-            </details>
-        ` : ''}
-    `;
-    modal.style.display = 'block';
-
-    // Store passed jobs for scoring
-    scanState.jobs = passed;
-    scanState.results = [];
-    scanState.currentIndex = 0;
-    scanState.candidateProfile = candidateProfile;
-
-    // Add click handler for full scoring button
-    document.getElementById('run-full-scoring').addEventListener('click', () => {
-        runFullScoring();
-    });
-}
-
-// --- Phase 5: Full AI Scoring ---
-async function runFullScoring() {
-    scanState.isScanning = true;
-    const jobsToScore = scanState.jobs.slice(0, DELAYS.maxJobsPerScan);
-
-    showLoading(`Scoring job 1 of ${jobsToScore.length}...`);
-
-    for (let i = 0; i < jobsToScore.length; i++) {
-        scanState.currentIndex = i;
-        const job = jobsToScore[i];
-
-        // Update progress
-        updateScanProgress(i + 1, jobsToScore.length, job.title);
-
-        try {
-            // Send job for scoring via background script
-            const response = await chrome.runtime.sendMessage({
-                type: 'scoreJob',
-                job: {
-                    title: job.title,
-                    company: job.company,
-                    location: job.location,
-                    link: job.link,
-                    // We'll fetch the full description in background if needed
-                }
-            });
-
-            if (response && response.success) {
-                scanState.results.push({
-                    ...job,
-                    score: response.data.fitScore,
-                    analysis: response.data
-                });
-
-                // Update job card visual based on score
-                updateJobCardVisual(job.element, response.data.fitScore);
-            } else {
-                console.error('CareerFit: Error scoring job:', response?.error);
-                scanState.results.push({
-                    ...job,
-                    score: 0,
-                    error: response?.error || 'Unknown error'
-                });
-            }
-        } catch (error) {
-            console.error('CareerFit: Exception scoring job:', error);
-            scanState.results.push({
-                ...job,
-                score: 0,
-                error: error.message
-            });
-        }
-
-        // Add delay between jobs (anti-bot)
-        if (i < jobsToScore.length - 1) {
-            const delay = DELAYS.betweenJobs();
-            console.log(`CareerFit: Waiting ${Math.round(delay/1000)}s before next job...`);
-            await sleep(delay);
-        }
-    }
-
-    scanState.isScanning = false;
-    displayFinalResults();
-}
-
-function updateScanProgress(current, total, jobTitle) {
-    const modalContent = document.getElementById('assess-modal-content');
-    const percent = Math.round((current / total) * 100);
-
-    modalContent.innerHTML = `
-        <h4 style="margin-top: 0;">Scoring Jobs...</h4>
-        <div style="background: #f5f5f5; border-radius: 8px; padding: 2px; margin: 15px 0;">
-            <div style="background: linear-gradient(90deg, #4caf50, #81c784); width: ${percent}%; height: 8px; border-radius: 6px; transition: width 0.3s;"></div>
-        </div>
-        <p style="text-align: center; color: #666; font-size: 14px;">${current} of ${total}</p>
-        <p style="text-align: center; font-size: 13px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            ${jobTitle}
-        </p>
-        <p style="text-align: center; font-size: 12px; color: #aaa; margin-top: 20px;">
-            Please keep this tab open...
-        </p>
-    `;
-}
-
-function updateJobCardVisual(element, score) {
-    if (!element) return;
-
-    if (score >= 4) {
-        element.style.borderLeft = '4px solid #4caf50';
-        element.style.background = 'rgba(76, 175, 80, 0.05)';
-    } else if (score >= 3) {
-        element.style.borderLeft = '4px solid #ff9800';
-        element.style.background = 'rgba(255, 152, 0, 0.05)';
-    } else {
-        element.style.borderLeft = '4px solid #f44336';
-        element.style.opacity = '0.5';
-    }
-}
-
-function displayFinalResults() {
-    const results = scanState.results;
-    const highFit = results.filter(r => r.score >= 4).sort((a, b) => b.score - a.score);
-    const mediumFit = results.filter(r => r.score >= 3 && r.score < 4);
-    const lowFit = results.filter(r => r.score < 3 && r.score > 0);
-    const errors = results.filter(r => r.score === 0);
-
-    const modalContent = document.getElementById('assess-modal-content');
-
-    modalContent.innerHTML = `
-        <h4 style="margin-top: 0;">Scan Complete!</h4>
-        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <div style="flex: 1; text-align: center; padding: 12px; background: #e8f5e9; border-radius: 8px;">
-                <div style="font-size: 20px; font-weight: bold; color: #4caf50;">${highFit.length}</div>
-                <div style="font-size: 11px; color: #666;">Great Fit (4+)</div>
-            </div>
-            <div style="flex: 1; text-align: center; padding: 12px; background: #fff3e0; border-radius: 8px;">
-                <div style="font-size: 20px; font-weight: bold; color: #ff9800;">${mediumFit.length}</div>
-                <div style="font-size: 11px; color: #666;">Good Fit (3)</div>
-            </div>
-            <div style="flex: 1; text-align: center; padding: 12px; background: #ffebee; border-radius: 8px;">
-                <div style="font-size: 20px; font-weight: bold; color: #f44336;">${lowFit.length}</div>
-                <div style="font-size: 11px; color: #666;">Low Fit (1-2)</div>
-            </div>
-        </div>
-
-        ${highFit.length > 0 ? `
-            <h5 style="color: #4caf50; margin: 15px 0 10px 0;">Recommended Jobs</h5>
-            <div style="max-height: 300px; overflow-y: auto;">
-                ${highFit.map(job => `
-                    <div style="padding: 12px; margin: 8px 0; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${getScoreColor(job.score)};">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <strong style="font-size: 14px;">${job.title}</strong><br>
-                                <span style="color: #666; font-size: 13px;">${job.company}</span>
-                            </div>
-                            <div style="background: ${getScoreColor(job.score)}; color: white; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 13px;">
-                                ${job.score}/5
-                            </div>
-                        </div>
-                        ${job.analysis?.recommendation ? `<div style="font-size: 12px; color: #4caf50; margin-top: 6px;">${job.analysis.recommendation}</div>` : ''}
-                        ${job.analysis?.strengths?.length ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">✓ ${job.analysis.strengths[0]}</div>` : ''}
-                        <a href="${job.link}" target="_blank" style="display: inline-block; margin-top: 8px; font-size: 12px; color: #0a66c2; text-decoration: none;">View Job →</a>
-                    </div>
-                `).join('')}
-            </div>
-        ` : '<p style="color: #666; text-align: center; padding: 20px;">No jobs scored 4 or above. Try expanding your filters.</p>'}
-
-        ${mediumFit.length > 0 ? `
-            <details style="margin-top: 15px;">
-                <summary style="cursor: pointer; color: #ff9800; font-size: 13px; font-weight: 600;">Good Fit Jobs (${mediumFit.length})</summary>
-                <div style="margin-top: 8px;">
-                    ${mediumFit.map(job => `
-                        <div style="padding: 8px; margin: 4px 0; background: #fff8e1; border-radius: 6px; font-size: 13px;">
-                            <strong>${job.title}</strong> - ${job.company}
-                            <span style="float: right; color: #ff9800;">${job.score}/5</span>
-                            <br><a href="${job.link}" target="_blank" style="font-size: 11px; color: #0a66c2;">View →</a>
-                        </div>
-                    `).join('')}
-                </div>
-            </details>
-        ` : ''}
-
-        ${errors.length > 0 ? `
-            <details style="margin-top: 10px;">
-                <summary style="cursor: pointer; color: #999; font-size: 12px;">${errors.length} jobs couldn't be scored</summary>
-                <ul style="font-size: 11px; color: #999;">
-                    ${errors.map(j => `<li>${j.title} - ${j.error || 'Error'}</li>`).join('')}
-                </ul>
-            </details>
-        ` : ''}
-    `;
-    modal.style.display = 'block';
-}
-
+// --- Helper function for score colors ---
 function getScoreColor(score) {
-    if (score >= 4) return '#4caf50';
-    if (score >= 3) return '#ff9800';
-    return '#f44336';
-}
-
-// --- Handle Score Result from Background ---
-function handleScoreResult(message) {
-    // This is called when background sends score results
-    // Currently handled inline in runFullScoring, but keeping for future async improvements
-    console.log('CareerFit: Received score result:', message);
-}
-
-// --- Attach Scan Jobs Button Handler ---
-if (onSearchPage) {
-    const scanBtn = document.getElementById('scan-jobs-btn');
-    if (scanBtn) {
-        scanBtn.addEventListener('click', handleScanJobs);
-    }
+    if (score >= 4) return '#3d8b6e'; // dark green
+    if (score >= 3) return '#c9a050'; // orange/gold
+    return '#4a4a4a'; // grey
 }
 
 // ============================================================
@@ -1138,6 +738,63 @@ async function saveJobToHistory(job) {
     return jobRecord;
 }
 
+// --- 6.1b: Skills to Learn Storage ---
+async function saveSkillToLearn(skillData) {
+    const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
+
+    // Check if skill already exists
+    const existingIndex = skillsToLearn.findIndex(s => s.skill.toLowerCase() === skillData.skill.toLowerCase());
+
+    const skillRecord = {
+        skill: skillData.skill,
+        resources: skillData.resources || '',
+        keywords: skillData.keywords || [],
+        savedAt: new Date().toISOString(),
+        learned: false
+    };
+
+    if (existingIndex >= 0) {
+        // Update existing - merge keywords
+        const existing = skillsToLearn[existingIndex];
+        const mergedKeywords = [...new Set([...(existing.keywords || []), ...(skillRecord.keywords || [])])];
+        skillsToLearn[existingIndex] = {
+            ...existing,
+            resources: skillRecord.resources || existing.resources,
+            keywords: mergedKeywords
+        };
+    } else {
+        // Add new skill at beginning
+        skillsToLearn.unshift(skillRecord);
+    }
+
+    // Limit to 100 skills
+    if (skillsToLearn.length > 100) {
+        skillsToLearn.splice(100);
+    }
+
+    await safeStorageSet({ skillsToLearn });
+    console.log('CareerFit: Saved skill to learn:', skillRecord.skill);
+    return skillRecord;
+}
+
+async function toggleSkillLearned(skillName) {
+    const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
+    const skillIndex = skillsToLearn.findIndex(s => s.skill === skillName);
+
+    if (skillIndex >= 0) {
+        skillsToLearn[skillIndex].learned = !skillsToLearn[skillIndex].learned;
+        await safeStorageSet({ skillsToLearn });
+    }
+    return skillsToLearn;
+}
+
+async function removeSkillToLearn(skillName) {
+    const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
+    const filtered = skillsToLearn.filter(s => s.skill !== skillName);
+    await safeStorageSet({ skillsToLearn: filtered });
+    return filtered;
+}
+
 async function updateJobStatus(jobId, status, notes = null) {
     const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
     const jobIndex = jobHistory.findIndex(j => j.id === jobId);
@@ -1146,6 +803,9 @@ async function updateJobStatus(jobId, status, notes = null) {
         jobHistory[jobIndex].status = status;
         if (status === 'applied') {
             jobHistory[jobIndex].appliedAt = new Date().toISOString();
+        }
+        if (status === 'interested') {
+            jobHistory[jobIndex].interestedAt = new Date().toISOString();
         }
         if (notes !== null) {
             jobHistory[jobIndex].notes = notes;
@@ -1160,6 +820,7 @@ async function updateJobStatus(jobId, status, notes = null) {
             updates: {
                 status,
                 appliedAt: jobHistory[jobIndex].appliedAt,
+                interestedAt: jobHistory[jobIndex].interestedAt,
                 notes: jobHistory[jobIndex].notes
             }
         });
@@ -1176,116 +837,154 @@ async function getJobHistory(filter = 'all') {
     return jobHistory.filter(j => j.status === filter);
 }
 
-// --- 6.2: Save results after scanning ---
-async function saveAllScanResults() {
-    const results = scanState.results;
-    for (const job of results) {
-        await saveJobToHistory({
-            ...job,
-            status: job.score >= 4 ? 'interested' : 'scanned'
-        });
-    }
-    console.log('CareerFit: Saved', results.length, 'jobs to history');
-}
-
 // --- 6.3: View History Modal ---
 async function showJobHistory() {
     showLoading('Loading job history...');
 
     let jobHistory = await getJobHistory();
-
-    if (jobHistory.length === 0) {
-        const modalContent = document.getElementById('assess-modal-content');
-        modalContent.innerHTML = `
-            <h4 style="margin-top: 0;">Job History</h4>
-            <p style="color: #666; text-align: center; padding: 30px;">
-                No jobs in history yet.<br>
-                <small>Scan some jobs to start building your history!</small>
-            </p>
-        `;
-        return;
-    }
+    const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
 
     // Sort by fit score (highest first), jobs without score at the end
     jobHistory = [...jobHistory].sort((a, b) => {
         const scoreA = a.score || 0;
         const scoreB = b.score || 0;
         if (scoreA === scoreB) {
-            // If same score, sort by date (most recent first)
             return new Date(b.scannedAt) - new Date(a.scannedAt);
         }
         return scoreB - scoreA;
     });
 
-    // Group by status
-    const applied = jobHistory.filter(j => j.status === 'applied');
-    const interested = jobHistory.filter(j => j.status === 'interested');
-    const interviewed = jobHistory.filter(j => j.status === 'interview');
-    const scanned = jobHistory.filter(j => j.status === 'scanned');
+    // Group jobs and skills
+    const interestedJobs = jobHistory.filter(j => j.status === 'interested');
+    const appliedJobs = jobHistory.filter(j => j.status === 'applied');
+    const pendingSkills = skillsToLearn.filter(s => !s.learned);
+    const learnedSkills = skillsToLearn.filter(s => s.learned);
 
     const modalContent = document.getElementById('assess-modal-content');
     modalContent.innerHTML = `
-        <h4 style="margin-top: 0;">Job History (${jobHistory.length} jobs)</h4>
-
-        <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #e3f2fd; border-radius: 6px;">
-                <div style="font-size: 18px; font-weight: bold; color: #1976d2;">${applied.length}</div>
-                <div style="font-size: 10px; color: #666;">Applied</div>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; line-height: 1.35;">
+            <!-- Tab buttons - 5 tabs (11px, black/grey) -->
+            <div style="display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #e0ddd0;">
+                <button id="tab-all-jobs" class="history-tab active" style="flex: 1; padding: 6px 4px; border: none; border-bottom: 2px solid #3d8b6e; background: transparent; color: #222; cursor: pointer; font-size: 11px; font-weight: 600;">All (${jobHistory.length})</button>
+                <button id="tab-interested" class="history-tab" style="flex: 1; padding: 6px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">Interested (${interestedJobs.length})</button>
+                <button id="tab-applied" class="history-tab" style="flex: 1; padding: 6px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">Applied (${appliedJobs.length})</button>
+                <button id="tab-skills" class="history-tab" style="flex: 1; padding: 6px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">To Learn (${pendingSkills.length})</button>
+                <button id="tab-learned" class="history-tab" style="flex: 1; padding: 6px 4px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #666; cursor: pointer; font-size: 11px; font-weight: 600;">Learned (${learnedSkills.length})</button>
             </div>
-            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #f3e5f5; border-radius: 6px;">
-                <div style="font-size: 18px; font-weight: bold; color: #7b1fa2;">${interviewed.length}</div>
-                <div style="font-size: 10px; color: #666;">Interview</div>
-            </div>
-            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #e8f5e9; border-radius: 6px;">
-                <div style="font-size: 18px; font-weight: bold; color: #4caf50;">${interested.length}</div>
-                <div style="font-size: 10px; color: #666;">Interested</div>
-            </div>
-            <div style="flex: 1; min-width: 70px; text-align: center; padding: 10px; background: #f5f5f5; border-radius: 6px;">
-                <div style="font-size: 18px; font-weight: bold; color: #666;">${scanned.length}</div>
-                <div style="font-size: 10px; color: #666;">Scanned</div>
-            </div>
-        </div>
 
-        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-            <button class="history-filter-btn active" data-filter="all" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: #0a66c2; color: white; cursor: pointer; font-size: 12px;">All</button>
-            <button class="history-filter-btn" data-filter="applied" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">Applied</button>
-            <button class="history-filter-btn" data-filter="interested" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">Interested</button>
-        </div>
+            <!-- All Jobs Panel -->
+            <div id="panel-all-jobs">
+                ${jobHistory.length === 0 ? `
+                    <p style="color: #666; text-align: center; padding: 20px;">
+                        No jobs in history yet.<br>
+                        <small>Scan some jobs to start building your history!</small>
+                    </p>
+                ` : `
+                    <div id="history-list" style="max-height: 320px; overflow-y: auto;">
+                        ${renderHistoryList(jobHistory)}
+                    </div>
+                    <div style="margin-top: 10px; text-align: center;">
+                        <button id="clear-history-btn" style="padding: 5px 10px; background: #4a4a4a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;">Clear History</button>
+                    </div>
+                `}
+            </div>
 
-        <div id="history-list" style="max-height: 350px; overflow-y: auto;">
-            ${renderHistoryList(jobHistory)}
-        </div>
+            <!-- Interested Jobs Panel -->
+            <div id="panel-interested" style="display: none;">
+                ${interestedJobs.length === 0 ? `
+                    <p style="color: #666; text-align: center; padding: 20px;">
+                        No interested jobs yet.<br>
+                        <small>Mark jobs as "Interested" to prepare for applying.</small>
+                    </p>
+                ` : `
+                    <div id="interested-list" style="max-height: 320px; overflow-y: auto;">
+                        ${renderHistoryList(interestedJobs)}
+                    </div>
+                `}
+            </div>
 
-        <div style="margin-top: 12px; text-align: center;">
-            <button id="clear-history-btn" style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Clear All History</button>
+            <!-- Applied Jobs Panel -->
+            <div id="panel-applied" style="display: none;">
+                ${appliedJobs.length === 0 ? `
+                    <p style="color: #666; text-align: center; padding: 20px;">
+                        No applied jobs yet.<br>
+                        <small>Mark jobs as "Applied" to track them here.</small>
+                    </p>
+                ` : `
+                    <div id="applied-list" style="max-height: 320px; overflow-y: auto;">
+                        ${renderHistoryList(appliedJobs)}
+                    </div>
+                `}
+            </div>
+
+            <!-- Skills to Learn Panel -->
+            <div id="panel-skills" style="display: none;">
+                ${renderPendingSkillsList(pendingSkills)}
+            </div>
+
+            <!-- Learned Skills Panel -->
+            <div id="panel-learned" style="display: none;">
+                ${renderLearnedSkillsList(learnedSkills)}
+            </div>
         </div>
     `;
 
-    // Add filter button handlers
-    modalContent.querySelectorAll('.history-filter-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const filter = e.target.dataset.filter;
-            const filtered = filter === 'all' ? jobHistory : jobHistory.filter(j => j.status === filter);
-            document.getElementById('history-list').innerHTML = renderHistoryList(filtered);
-
-            // Update active state
-            modalContent.querySelectorAll('.history-filter-btn').forEach(b => {
-                b.style.background = 'white';
-                b.style.color = '#333';
-            });
-            e.target.style.background = '#0a66c2';
-            e.target.style.color = 'white';
-
-            // Re-attach event listeners for the new list
-            attachHistoryListeners();
+    // Tab switching helper
+    function setActiveTab(activeTabId, activePanelId) {
+        // Reset all tabs - grey inactive
+        ['tab-all-jobs', 'tab-interested', 'tab-applied', 'tab-skills', 'tab-learned'].forEach(id => {
+            const tab = document.getElementById(id);
+            if (tab) {
+                tab.style.borderBottomColor = 'transparent';
+                tab.style.color = '#666';
+            }
         });
+        // Hide all panels
+        ['panel-all-jobs', 'panel-interested', 'panel-applied', 'panel-skills', 'panel-learned'].forEach(id => {
+            const panel = document.getElementById(id);
+            if (panel) panel.style.display = 'none';
+        });
+        // Activate selected - black text, green underline
+        const activeTab = document.getElementById(activeTabId);
+        const activePanel = document.getElementById(activePanelId);
+        if (activeTab) {
+            activeTab.style.borderBottomColor = '#3d8b6e';
+            activeTab.style.color = '#222';
+        }
+        if (activePanel) activePanel.style.display = 'block';
+    }
+
+    // Tab click handlers
+    document.getElementById('tab-all-jobs').addEventListener('click', () => {
+        setActiveTab('tab-all-jobs', 'panel-all-jobs');
+        attachHistoryListeners();
+    });
+
+    document.getElementById('tab-interested').addEventListener('click', () => {
+        setActiveTab('tab-interested', 'panel-interested');
+        attachHistoryListeners();
+    });
+
+    document.getElementById('tab-applied').addEventListener('click', () => {
+        setActiveTab('tab-applied', 'panel-applied');
+        attachHistoryListeners();
+    });
+
+    document.getElementById('tab-skills').addEventListener('click', () => {
+        setActiveTab('tab-skills', 'panel-skills');
+        attachSkillsListeners();
+    });
+
+    document.getElementById('tab-learned').addEventListener('click', () => {
+        setActiveTab('tab-learned', 'panel-learned');
+        attachSkillsListeners();
     });
 
     // Add clear history handler
-    document.getElementById('clear-history-btn').addEventListener('click', async () => {
+    document.getElementById('clear-history-btn')?.addEventListener('click', async () => {
         if (confirm('Are you sure you want to clear all job history? This cannot be undone.')) {
             await safeStorageSet({ jobHistory: [] });
-            showJobHistory(); // Refresh
+            showJobHistory();
         }
     });
 
@@ -1295,25 +994,31 @@ async function showJobHistory() {
 
 function renderHistoryList(jobs) {
     if (jobs.length === 0) {
-        return '<p style="color: #888; text-align: center; padding: 20px;">No jobs match this filter.</p>';
+        return '<p style="color: #888; text-align: center; padding: 12px; font-size: 12px;">No jobs match this filter.</p>';
     }
 
+    // Option B: Green + Cream Hybrid (Tighter) styling
     return jobs.map(job => {
         const statusColors = {
-            applied: '#1976d2',
-            interview: '#7b1fa2',
-            interested: '#4caf50',
-            scanned: '#999',
-            rejected: '#f44336'
+            applied: '#3d8b6e',    // dark green
+            interested: '#c9a050', // orange
+            scanned: '#9DC3B5'    // calming green
         };
-        const statusColor = statusColors[job.status] || '#999';
+        const statusColor = statusColors[job.status] || '#9DC3B5';
 
-        // Show score if available, otherwise show summary info or nothing
-        let infoDisplay = '';
+        // Get title - try multiple sources
+        const jobTitle = job.title || job.analysis?.jobTitle || job.summary?.title || 'Untitled Job';
+        const jobCompany = job.company || job.analysis?.company || 'Unknown Company';
+
+        // Score badge (circular) or summary tag
+        let scoreBadge = '';
+        let infoTag = '';
         if (job.score) {
-            infoDisplay = `<span style="background: ${getScoreColor(job.score)}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">${job.score}/5</span>`;
-        } else if (job.summary) {
-            // Show years/type from summary
+            const scoreColor = getScoreColor(job.score);
+            scoreBadge = `<div style="width: 28px; height: 28px; border-radius: 50%; background: ${scoreColor}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="color: white; font-size: 14px; font-weight: 700;">${job.score}</span></div>`;
+        }
+        if (job.summary) {
+            // Show years/type from summary with creamy tag style
             const summaryInfo = [];
             if (job.summary.yearsRequired && job.summary.yearsRequired !== 'Not specified') {
                 summaryInfo.push(job.summary.yearsRequired);
@@ -1322,33 +1027,36 @@ function renderHistoryList(jobs) {
                 summaryInfo.push(job.summary.managerType);
             }
             if (summaryInfo.length > 0) {
-                infoDisplay = `<span style="background: #e0e0e0; color: #666; padding: 2px 6px; border-radius: 10px; font-size: 11px;">${summaryInfo.join(' · ')}</span>`;
+                infoTag = `<span style="background: #F5F3E7; color: #2d6b52; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; border: 1px solid #e0ddd0; margin-left: 6px;">${summaryInfo.join(' · ')}</span>`;
             }
         }
 
-        const dateDisplay = job.appliedAt ?
-            `Applied ${new Date(job.appliedAt).toLocaleDateString()}` :
-            `Scanned ${new Date(job.scannedAt).toLocaleDateString()}`;
+        // Shorter date format
+        const date = job.appliedAt || job.interestedAt ? new Date(job.appliedAt || job.interestedAt) : new Date(job.scannedAt);
+        const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+        const statusLabels = { applied: 'Applied', interested: 'Interested', scanned: 'Scanned' };
+        const dateDisplay = `${statusLabels[job.status] || 'Scanned'} ${dateStr}`;
 
         return `
-            <div class="history-job-item" data-job-id="${job.id}" style="padding: 10px; margin: 6px 0; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${statusColor};">
-                <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div class="history-job-item" data-job-id="${job.id}" style="padding: 8px; margin: 4px 0; background: #fdfcf8; border-radius: 5px; border-left: 3px solid ${statusColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    ${scoreBadge}
                     <div style="flex: 1;">
-                        <strong style="font-size: 13px;">${job.title}</strong> ${infoDisplay}<br>
-                        <span style="color: #666; font-size: 12px;">${job.company}</span><br>
-                        <span style="color: #999; font-size: 10px;">${dateDisplay}</span>
+                        <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                            <strong style="font-size: 12px; color: #222;">${jobTitle}</strong>${infoTag}
+                        </div>
+                        <div style="color: #222; font-size: 12px;">${jobCompany}</div>
+                        <div style="color: #4a4a4a; font-size: 10px; margin-top: 2px;">${dateDisplay}</div>
                     </div>
                 </div>
-                <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
-                    <select class="job-status-select" data-job-id="${job.id}" style="padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: white;">
-                        <option value="scanned" ${job.status === 'scanned' ? 'selected' : ''}>Scanned</option>
+                <div style="margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
+                    <select class="job-status-select" data-job-id="${job.id}" style="padding: 3px 6px; border: 1px solid #e0ddd0; border-radius: 4px; font-size: 10px; background: #F5F3E7; color: #2d6b52;">
+                        <option value="scanned" ${job.status === 'scanned' || !job.status ? 'selected' : ''}>Scanned</option>
                         <option value="interested" ${job.status === 'interested' ? 'selected' : ''}>Interested</option>
                         <option value="applied" ${job.status === 'applied' ? 'selected' : ''}>Applied</option>
-                        <option value="interview" ${job.status === 'interview' ? 'selected' : ''}>Interview</option>
-                        <option value="rejected" ${job.status === 'rejected' ? 'selected' : ''}>Rejected</option>
                     </select>
-                    <a href="${job.link}" target="_blank" style="padding: 4px 8px; background: #0a66c2; color: white; border-radius: 4px; font-size: 11px; text-decoration: none;">View</a>
-                    <button class="match-bullets-btn" data-job-id="${job.id}" style="padding: 4px 8px; background: #ff9800; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">Match Resume</button>
+                    <a href="${job.link}" target="_blank" style="padding: 3px 8px; background: #3d8b6e; color: white; border-radius: 4px; font-size: 10px; text-decoration: none; font-weight: 500;">View</a>
+                    <button class="match-bullets-btn" data-job-id="${job.id}" style="padding: 3px 8px; background: #c9a050; color: white; border: none; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: 500;">Match</button>
                 </div>
             </div>
         `;
@@ -1363,16 +1071,23 @@ function attachHistoryListeners() {
             const newStatus = e.target.value;
             await updateJobStatus(jobId, newStatus);
 
-            // Visual feedback
+            // Visual feedback - Option B colors
             const item = e.target.closest('.history-job-item');
             const statusColors = {
-                applied: '#1976d2',
-                interview: '#7b1fa2',
-                interested: '#4caf50',
-                scanned: '#999',
-                rejected: '#f44336'
+                applied: '#3d8b6e',
+                interested: '#c9a050',
+                scanned: '#9DC3B5'
             };
-            item.style.borderLeftColor = statusColors[newStatus] || '#999';
+            item.style.borderLeftColor = statusColors[newStatus] || '#9DC3B5';
+
+            // Trigger Resume Bullet Matching when marked as Interested
+            if (newStatus === 'interested') {
+                const { jobHistory = [] } = await safeStorageGet(['jobHistory']);
+                const job = jobHistory.find(j => j.id === jobId);
+                if (job) {
+                    showBulletMatching(job);
+                }
+            }
         });
     });
 
@@ -1386,6 +1101,145 @@ function attachHistoryListeners() {
                 showBulletMatching(job);
             }
         });
+    });
+}
+
+// --- 6.3b: Skills to Learn List ---
+function renderPendingSkillsList(skills) {
+    if (skills.length === 0) {
+        return `
+            <p style="color: #666; text-align: center; padding: 20px;">
+                No skills to learn yet.<br>
+                <small style="color: #888;">Click + on skill gaps in Assess results to save them here.</small>
+            </p>
+        `;
+    }
+
+    let html = `<div style="max-height: 320px; overflow-y: auto;">`;
+    skills.forEach(skill => {
+        html += renderSkillCard(skill, false);
+    });
+    html += `</div>`;
+
+    html += `
+        <div style="margin-top: 10px; text-align: center;">
+            <button id="clear-pending-skills-btn" style="padding: 5px 10px; background: #4a4a4a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;">Clear To Learn</button>
+        </div>
+    `;
+
+    return html;
+}
+
+function renderLearnedSkillsList(skills) {
+    if (skills.length === 0) {
+        return `
+            <p style="color: #666; text-align: center; padding: 20px;">
+                No learned skills yet.<br>
+                <small style="color: #888;">Mark skills as learned to track your progress!</small>
+            </p>
+        `;
+    }
+
+    let html = `<div style="max-height: 320px; overflow-y: auto;">`;
+    skills.forEach(skill => {
+        html += renderSkillCard(skill, true);
+    });
+    html += `</div>`;
+
+    html += `
+        <div style="margin-top: 10px; text-align: center;">
+            <button id="clear-learned-skills-btn" style="padding: 5px 10px; background: #4a4a4a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;">Clear Learned</button>
+        </div>
+    `;
+
+    return html;
+}
+
+function renderSkillCard(skill, isLearned) {
+    // Option B styling - use calming green for learned, healing yellow for pending
+    const bgColor = isLearned ? '#fdfcf8' : '#fdfcf8';
+    const borderColor = isLearned ? '#9DC3B5' : '#F0D58C';
+    const textDecor = isLearned ? 'line-through' : 'none';
+    const textColor = isLearned ? '#888' : '#333';
+
+    return `
+        <div class="skill-card" data-skill="${skill.skill.replace(/"/g, '&quot;')}" style="background: ${bgColor}; border-radius: 5px; padding: 8px; margin-bottom: 6px; border-left: 3px solid ${borderColor}; position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div style="flex: 1;">
+                    <div style="font-size: 12px; font-weight: 600; color: ${textColor}; text-decoration: ${textDecor};">${skill.skill}</div>
+                    ${skill.resources ? `<div style="font-size: 10px; color: #666; margin-top: 2px;">${skill.resources}</div>` : ''}
+                    ${skill.keywords && skill.keywords.length > 0 ? `
+                        <div style="margin-top: 4px;">
+                            ${skill.keywords.map(kw => `<span style="background: #e8f5f1; color: #2d6b52; padding: 1px 5px; border-radius: 4px; font-size: 9px; margin-right: 2px;">${kw}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+                <div style="display: flex; gap: 4px;">
+                    <button class="toggle-learned-btn" data-skill="${skill.skill.replace(/"/g, '&quot;')}" style="width: 22px; height: 22px; border-radius: 50%; border: 1px solid ${isLearned ? '#3d8b6e' : '#d0e8e0'}; background: ${isLearned ? '#3d8b6e' : '#e8f5f1'}; color: ${isLearned ? 'white' : '#3d8b6e'}; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;" title="${isLearned ? 'Mark as not learned' : 'Mark as learned'}">✓</button>
+                    <button class="remove-skill-btn" data-skill="${skill.skill.replace(/"/g, '&quot;')}" style="width: 22px; height: 22px; border-radius: 50%; border: 1px solid #e0ddd0; background: #F5F3E7; color: #4a4a4a; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;" title="Remove">×</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function attachSkillsListeners() {
+    // Toggle learned status
+    document.querySelectorAll('.toggle-learned-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const skillName = e.target.dataset.skill;
+            await toggleSkillLearned(skillName);
+            // Refresh both skills panels
+            const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
+            const pending = skillsToLearn.filter(s => !s.learned);
+            const learned = skillsToLearn.filter(s => s.learned);
+            document.getElementById('panel-skills').innerHTML = renderPendingSkillsList(pending);
+            document.getElementById('panel-learned').innerHTML = renderLearnedSkillsList(learned);
+            // Update tab counts
+            document.getElementById('tab-skills').textContent = `To Learn (${pending.length})`;
+            document.getElementById('tab-learned').textContent = `Learned (${learned.length})`;
+            attachSkillsListeners();
+        });
+    });
+
+    // Remove skill
+    document.querySelectorAll('.remove-skill-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const skillName = e.target.dataset.skill;
+            await removeSkillToLearn(skillName);
+            // Refresh both skills panels
+            const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
+            const pending = skillsToLearn.filter(s => !s.learned);
+            const learned = skillsToLearn.filter(s => s.learned);
+            document.getElementById('panel-skills').innerHTML = renderPendingSkillsList(pending);
+            document.getElementById('panel-learned').innerHTML = renderLearnedSkillsList(learned);
+            // Update tab counts
+            document.getElementById('tab-skills').textContent = `To Learn (${pending.length})`;
+            document.getElementById('tab-learned').textContent = `Learned (${learned.length})`;
+            attachSkillsListeners();
+        });
+    });
+
+    // Clear pending skills
+    document.getElementById('clear-pending-skills-btn')?.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to clear all skills to learn?')) {
+            const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
+            const learnedOnly = skillsToLearn.filter(s => s.learned);
+            await safeStorageSet({ skillsToLearn: learnedOnly });
+            document.getElementById('panel-skills').innerHTML = renderPendingSkillsList([]);
+            document.getElementById('tab-skills').textContent = `To Learn (0)`;
+        }
+    });
+
+    // Clear learned skills
+    document.getElementById('clear-learned-skills-btn')?.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to clear all learned skills?')) {
+            const { skillsToLearn = [] } = await safeStorageGet(['skillsToLearn']);
+            const pendingOnly = skillsToLearn.filter(s => !s.learned);
+            await safeStorageSet({ skillsToLearn: pendingOnly });
+            document.getElementById('panel-learned').innerHTML = renderLearnedSkillsList([]);
+            document.getElementById('tab-learned').textContent = `Learned (0)`;
+        }
     });
 }
 
@@ -1422,47 +1276,47 @@ function displayBulletMatches(job, matchData) {
     const suggestions = matchData.suggestions || [];
 
     modalContent.innerHTML = `
-        <h4 style="margin-top: 0;">Resume Match: ${job.title}</h4>
-        <p style="color: #666; font-size: 12px; margin-bottom: 15px;">${job.company}</p>
+        <div style="font-size: 13px; font-weight: 600; color: #222; margin-bottom: 4px;">Resume Match: ${job.title}</div>
+        <div style="color: #666; font-size: 12px; margin-bottom: 12px;">${job.company}</div>
 
         ${strongMatches.length > 0 ? `
-            <h5 style="color: #4caf50; margin: 10px 0 8px 0; font-size: 13px;">Strong Matches (${strongMatches.length})</h5>
-            <ul style="margin: 0 0 15px 0; padding-left: 18px; font-size: 12px;">
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #3d8b6e; margin-bottom: 6px; font-weight: 600;">Strong Matches (${strongMatches.length})</div>
+            <ul style="margin: 0 0 12px 0; padding-left: 18px; font-size: 12px;">
                 ${strongMatches.map(m => `
                     <li style="margin: 6px 0; color: #333;">
                         "${m.bullet}"
-                        <br><span style="color: #4caf50; font-size: 11px;">→ ${m.reason}</span>
+                        <br><span style="color: #3d8b6e; font-size: 11px;">→ ${m.reason}</span>
                     </li>
                 `).join('')}
             </ul>
         ` : ''}
 
         ${moderateMatches.length > 0 ? `
-            <h5 style="color: #ff9800; margin: 10px 0 8px 0; font-size: 13px;">Moderate Matches (${moderateMatches.length})</h5>
-            <ul style="margin: 0 0 15px 0; padding-left: 18px; font-size: 12px;">
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #c9a050; margin-bottom: 6px; font-weight: 600;">Moderate Matches (${moderateMatches.length})</div>
+            <ul style="margin: 0 0 12px 0; padding-left: 18px; font-size: 12px;">
                 ${moderateMatches.map(m => `
                     <li style="margin: 6px 0; color: #333;">
                         "${m.bullet}"
-                        <br><span style="color: #ff9800; font-size: 11px;">→ ${m.reason}</span>
+                        <br><span style="color: #c9a050; font-size: 11px;">→ ${m.reason}</span>
                     </li>
                 `).join('')}
             </ul>
         ` : ''}
 
         ${strongMatches.length === 0 && moderateMatches.length === 0 ? `
-            <p style="color: #f44336; font-style: italic;">No strong matches found between your resume and this job.</p>
+            <p style="color: #4a4a4a; font-style: italic; font-size: 12px;">No strong matches found between your resume and this job.</p>
         ` : ''}
 
         ${suggestions.length > 0 ? `
-            <h5 style="color: #0a66c2; margin: 15px 0 8px 0; font-size: 13px;">Suggestions to Strengthen Application</h5>
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #4a4a4a; margin: 12px 0 6px 0; font-weight: 600;">Suggestions</div>
             <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #666;">
                 ${suggestions.map(s => `<li style="margin: 4px 0;">${s}</li>`).join('')}
             </ul>
         ` : ''}
 
-        <div style="margin-top: 20px; display: flex; gap: 10px;">
-            <button id="back-to-history" style="flex: 1; padding: 10px; background: #666; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">← Back to History</button>
-            <a href="${job.link}" target="_blank" style="flex: 1; padding: 10px; background: #0a66c2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; text-decoration: none; text-align: center;">View Job</a>
+        <div style="margin-top: 15px; display: flex; gap: 8px;">
+            <button id="back-to-history" style="flex: 1; padding: 8px; background: #F5F3E7; color: #2d6b52; border: 1px solid #e0ddd0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">← Back</button>
+            <a href="${job.link}" target="_blank" style="flex: 1; padding: 8px; background: #3d8b6e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; text-decoration: none; text-align: center; font-weight: 600;">View Job</a>
         </div>
     `;
 
@@ -1471,126 +1325,481 @@ function displayBulletMatches(job, matchData) {
     });
 }
 
-// --- Add History Button to UI ---
-function addHistoryButton() {
-    const historyBtn = document.createElement('button');
-    historyBtn.id = 'history-btn';
-    historyBtn.textContent = 'History';
-    historyBtn.style.cssText = `
-        background-color: #666;
-        color: white;
-        border: none;
-        padding: 10px 16px;
-        border-radius: 20px;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        font-size: 13px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-    `;
-    historyBtn.addEventListener('mouseenter', () => {
-        historyBtn.style.backgroundColor = '#555';
-    });
-    historyBtn.addEventListener('mouseleave', () => {
-        historyBtn.style.backgroundColor = '#666';
-    });
-    historyBtn.addEventListener('click', () => {
-        modal.style.display = 'block';
-        showJobHistory();
-    });
-
-    buttonContainer.appendChild(historyBtn);
-}
-
-// Initialize history button
-addHistoryButton();
-
-// --- Modify displayFinalResults to save history ---
-const originalDisplayFinalResults = displayFinalResults;
-displayFinalResults = async function() {
-    // Save all results to history first
-    await saveAllScanResults();
-
-    // Call original function to display results
-    const results = scanState.results;
-    const highFit = results.filter(r => r.score >= 4).sort((a, b) => b.score - a.score);
-    const mediumFit = results.filter(r => r.score >= 3 && r.score < 4);
-    const lowFit = results.filter(r => r.score < 3 && r.score > 0);
-    const errors = results.filter(r => r.score === 0);
-
-    const modalContent = document.getElementById('assess-modal-content');
-
-    modalContent.innerHTML = `
-        <h4 style="margin-top: 0;">Scan Complete! <span style="font-size: 12px; color: #4caf50;">(Saved to History)</span></h4>
-        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <div style="flex: 1; text-align: center; padding: 12px; background: #e8f5e9; border-radius: 8px;">
-                <div style="font-size: 20px; font-weight: bold; color: #4caf50;">${highFit.length}</div>
-                <div style="font-size: 11px; color: #666;">Great Fit (4+)</div>
-            </div>
-            <div style="flex: 1; text-align: center; padding: 12px; background: #fff3e0; border-radius: 8px;">
-                <div style="font-size: 20px; font-weight: bold; color: #ff9800;">${mediumFit.length}</div>
-                <div style="font-size: 11px; color: #666;">Good Fit (3)</div>
-            </div>
-            <div style="flex: 1; text-align: center; padding: 12px; background: #ffebee; border-radius: 8px;">
-                <div style="font-size: 20px; font-weight: bold; color: #f44336;">${lowFit.length}</div>
-                <div style="font-size: 11px; color: #666;">Low Fit (1-2)</div>
-            </div>
-        </div>
-
-        ${highFit.length > 0 ? `
-            <h5 style="color: #4caf50; margin: 15px 0 10px 0;">Recommended Jobs</h5>
-            <div style="max-height: 250px; overflow-y: auto;">
-                ${highFit.map(job => `
-                    <div style="padding: 12px; margin: 8px 0; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${getScoreColor(job.score)};">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <strong style="font-size: 14px;">${job.title}</strong><br>
-                                <span style="color: #666; font-size: 13px;">${job.company}</span>
-                            </div>
-                            <div style="background: ${getScoreColor(job.score)}; color: white; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 13px;">
-                                ${job.score}/5
-                            </div>
-                        </div>
-                        ${job.analysis?.recommendation ? `<div style="font-size: 12px; color: #4caf50; margin-top: 6px;">${job.analysis.recommendation}</div>` : ''}
-                        ${job.analysis?.strengths?.length ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">✓ ${job.analysis.strengths[0]}</div>` : ''}
-                        <a href="${job.link}" target="_blank" style="display: inline-block; margin-top: 8px; font-size: 12px; color: #0a66c2; text-decoration: none;">View Job →</a>
-                    </div>
-                `).join('')}
-            </div>
-        ` : '<p style="color: #666; text-align: center; padding: 20px;">No jobs scored 4 or above. Try expanding your filters.</p>'}
-
-        ${mediumFit.length > 0 ? `
-            <details style="margin-top: 15px;">
-                <summary style="cursor: pointer; color: #ff9800; font-size: 13px; font-weight: 600;">Good Fit Jobs (${mediumFit.length})</summary>
-                <div style="margin-top: 8px;">
-                    ${mediumFit.map(job => `
-                        <div style="padding: 8px; margin: 4px 0; background: #fff8e1; border-radius: 6px; font-size: 13px;">
-                            <strong>${job.title}</strong> - ${job.company}
-                            <span style="float: right; color: #ff9800;">${job.score}/5</span>
-                            <br><a href="${job.link}" target="_blank" style="font-size: 11px; color: #0a66c2;">View →</a>
-                        </div>
-                    `).join('')}
-                </div>
-            </details>
-        ` : ''}
-
-        ${errors.length > 0 ? `
-            <details style="margin-top: 10px;">
-                <summary style="cursor: pointer; color: #999; font-size: 12px;">${errors.length} jobs couldn't be scored</summary>
-                <ul style="font-size: 11px; color: #999;">
-                    ${errors.map(j => `<li>${j.title} - ${j.error || 'Error'}</li>`).join('')}
-                </ul>
-            </details>
-        ` : ''}
-
-        <div style="margin-top: 15px; text-align: center;">
-            <button id="view-history-after-scan" style="padding: 10px 20px; background: #0a66c2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">View Full History</button>
-        </div>
-    `;
+// --- 6. Handle History button click ---
+document.getElementById('history-btn').addEventListener('click', () => {
     modal.style.display = 'block';
-
-    // Add handler for view history button
-    document.getElementById('view-history-after-scan')?.addEventListener('click', showJobHistory);
-};
+    showJobHistory();
+});
 
 console.log('CareerFit: Phase 6 - Apply Workflow Features loaded');
+
+// ============================================================
+// PHASE 8: Application Auto-Fill (Workday, Greenhouse, Lever)
+// ============================================================
+
+// Question patterns mapped to autofill field keys
+const QUESTION_PATTERNS = {
+    // Work Authorization
+    authUSA: [
+        /authorized.*work.*u\.?s|legally.*work.*united states|eligible.*work.*us|work authorization/i,
+        /are you.*authorized|do you have.*authorization|can you.*legally work/i,
+        /authorized to work for any employer/i
+    ],
+    sponsorship: [
+        /require.*sponsor|need.*sponsor|visa sponsor|sponsorship.*require|immigration.*sponsor/i,
+        /will you.*require|do you.*need.*visa|require.*visa/i,
+        /will you now or in the future require/i
+    ],
+    over18: [
+        /at least 18|18 years.*age|over 18|are you 18/i
+    ],
+
+    // Experience
+    yearsExp: [
+        /years.*experience|experience.*years|how many years|total.*experience/i
+    ],
+    currentTitle: [
+        /current.*title|job title|position.*title|your title/i
+    ],
+    currentCompany: [
+        /current.*company|current.*employer|where.*work|employer.*name/i
+    ],
+
+    // Personal Info
+    fullName: [
+        /full name|your name|legal name|first.*last.*name/i,
+        /^name$/i
+    ],
+    firstName: [
+        /first name|given name/i
+    ],
+    lastName: [
+        /last name|surname|family name/i
+    ],
+    email: [
+        /email|e-mail/i
+    ],
+    phone: [
+        /phone|telephone|mobile|cell/i
+    ],
+    linkedIn: [
+        /linkedin|linked in/i
+    ],
+
+    // Location
+    city: [
+        /^city$|your city|current city/i
+    ],
+    state: [
+        /^state$|province|region/i
+    ],
+    zipCode: [
+        /zip|postal code|postcode/i
+    ],
+    willingRelocate: [
+        /relocat|willing.*move|open.*relocation/i
+    ],
+
+    // Diversity
+    gender: [
+        /gender|sex/i,
+        /select your gender/i,
+        /please select.*gender/i
+    ],
+    ethnicity: [
+        /ethnic|race|racial/i,
+        /select.*ethnicity/i,
+        /please select.*ethnicity/i,
+        /which.*accurately describes.*identify/i
+    ],
+    hispanic: [
+        /hispanic.*latino|latino.*hispanic|identify as hispanic/i,
+        /do you identify as hispanic/i
+    ],
+    veteran: [
+        /veteran|military|armed forces|served.*military/i,
+        /select.*veteran/i,
+        /please select.*veteran/i
+    ],
+    disability: [
+        /disab|handicap/i,
+        /please check one of the boxes below/i,
+        /voluntary self-identification/i,
+        /self identify/i
+    ],
+    termsConsent: [
+        /terms and conditions|consent.*terms|read and consent/i,
+        /i've read and consent/i,
+        /information provided is true/i
+    ],
+
+    // Common form fields
+    fullNameField: [
+        /^name\*?$/i,
+        /your name\*?/i,
+        /^name$/i
+    ],
+    dateField: [
+        /^date\*?$/i,
+        /today.*date/i,
+        /^date$/i
+    ],
+    employeeId: [
+        /employee id/i
+    ]
+};
+
+// Yes/No value mappings for different sites
+const YES_NO_VALUES = {
+    yes: ['yes', 'true', '1', 'y', 'Yes', 'YES', 'True', 'TRUE'],
+    no: ['no', 'false', '0', 'n', 'No', 'NO', 'False', 'FALSE']
+};
+
+// Check if we're on a Workday application page
+function isWorkdayPage() {
+    const host = window.location.hostname;
+    return host.includes('workday.com') || host.includes('myworkdayjobs.com');
+}
+
+// Check if we're on a Greenhouse application page
+function isGreenhousePage() {
+    const host = window.location.hostname;
+    return host.includes('greenhouse.io') || document.querySelector('form[action*="greenhouse"]');
+}
+
+// Check if we're on a Lever application page
+function isLeverPage() {
+    const host = window.location.hostname;
+    return host.includes('lever.co') || host.includes('jobs.lever.co');
+}
+
+function isApplicationPage() {
+    return isWorkdayPage() || isGreenhousePage() || isLeverPage();
+}
+
+// Match a question/label text to an autofill field
+function matchQuestionToField(labelText) {
+    const cleanLabel = labelText.toLowerCase().trim();
+
+    for (const [fieldKey, patterns] of Object.entries(QUESTION_PATTERNS)) {
+        for (const pattern of patterns) {
+            if (pattern.test(cleanLabel)) {
+                return fieldKey;
+            }
+        }
+    }
+    return null;
+}
+
+// Get the value to fill based on field type
+function getAutofillValue(fieldKey, answers) {
+    // Handle name splitting
+    if (fieldKey === 'firstName' && answers.fullName) {
+        return answers.fullName.split(' ')[0] || '';
+    }
+    if (fieldKey === 'lastName' && answers.fullName) {
+        const parts = answers.fullName.split(' ');
+        return parts.slice(1).join(' ') || '';
+    }
+    // Handle fullNameField (from "Name*" label)
+    if (fieldKey === 'fullNameField' && answers.fullName) {
+        return answers.fullName;
+    }
+    // Handle date field - return today's date in MM/DD/YYYY format
+    if (fieldKey === 'dateField') {
+        const today = new Date();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${month}/${day}/${today.getFullYear()}`;
+    }
+    // "Are you at least 18?" - always yes
+    if (fieldKey === 'over18') {
+        return 'yes';
+    }
+    // Terms and conditions - always yes/consent
+    if (fieldKey === 'termsConsent') {
+        return 'yes';
+    }
+    // Employee ID - skip (no response)
+    if (fieldKey === 'employeeId') {
+        return '';
+    }
+
+    return answers[fieldKey] || '';
+}
+
+// Fill a text input
+function fillTextInput(input, value) {
+    if (!value || !input) return false;
+
+    // Trigger focus
+    input.focus();
+
+    // Set value using multiple methods for React/Angular compatibility
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(input, value);
+    } else {
+        input.value = value;
+    }
+
+    // Trigger events
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+    return true;
+}
+
+// Fill a select dropdown
+function fillSelect(select, value) {
+    if (!value || !select) return false;
+
+    const valueLower = value.toLowerCase();
+    const options = Array.from(select.options);
+
+    // Try to find matching option
+    let matchedOption = null;
+
+    // For yes/no questions
+    if (YES_NO_VALUES.yes.includes(value)) {
+        matchedOption = options.find(opt =>
+            YES_NO_VALUES.yes.some(v => opt.value.toLowerCase() === v.toLowerCase() || opt.text.toLowerCase() === v.toLowerCase())
+        );
+    } else if (YES_NO_VALUES.no.includes(value)) {
+        matchedOption = options.find(opt =>
+            YES_NO_VALUES.no.some(v => opt.value.toLowerCase() === v.toLowerCase() || opt.text.toLowerCase() === v.toLowerCase())
+        );
+    }
+
+    // Try text/value match
+    if (!matchedOption) {
+        matchedOption = options.find(opt =>
+            opt.value.toLowerCase().includes(valueLower) ||
+            opt.text.toLowerCase().includes(valueLower)
+        );
+    }
+
+    if (matchedOption) {
+        select.value = matchedOption.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+    }
+
+    return false;
+}
+
+// Fill a radio button group
+function fillRadio(radioGroup, value, fieldKey = null) {
+    if (!value || !radioGroup.length) return false;
+
+    const valueLower = value.toLowerCase();
+
+    for (const radio of radioGroup) {
+        const label = radio.closest('label')?.textContent?.toLowerCase() ||
+                      document.querySelector(`label[for="${radio.id}"]`)?.textContent?.toLowerCase() ||
+                      radio.value.toLowerCase();
+
+        // Special handling for disability field with specific text patterns
+        if (fieldKey === 'disability') {
+            if (value === 'yes' && label.includes('yes, i have a disability')) {
+                radio.click();
+                return true;
+            }
+            if (value === 'no' && label.includes('no, i do not have a disability')) {
+                radio.click();
+                return true;
+            }
+            if (value === '' && label.includes('do not want to answer')) {
+                radio.click();
+                return true;
+            }
+        }
+
+        // Special handling for veteran field with specific text patterns
+        if (fieldKey === 'veteran') {
+            if (value === 'yes' && (label.includes('i am a veteran') || label.includes('protected veteran'))) {
+                radio.click();
+                return true;
+            }
+            if (value === 'no' && label.includes('i am not a veteran')) {
+                radio.click();
+                return true;
+            }
+        }
+
+        // Check for yes/no
+        if (YES_NO_VALUES.yes.includes(value) && YES_NO_VALUES.yes.some(v => label.includes(v.toLowerCase()))) {
+            radio.click();
+            return true;
+        }
+        if (YES_NO_VALUES.no.includes(value) && YES_NO_VALUES.no.some(v => label.includes(v.toLowerCase()))) {
+            radio.click();
+            return true;
+        }
+
+        // Check for direct match
+        if (label.includes(valueLower)) {
+            radio.click();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Find form fields and their labels
+function findFormFields() {
+    const fields = [];
+
+    // Strategy 1: Find inputs with associated labels
+    document.querySelectorAll('label').forEach(label => {
+        const labelText = label.textContent?.trim();
+        if (!labelText) return;
+
+        // Find input by for attribute
+        let input = null;
+        if (label.htmlFor) {
+            input = document.getElementById(label.htmlFor);
+        }
+        // Find input inside label
+        if (!input) {
+            input = label.querySelector('input, select, textarea');
+        }
+        // Find next sibling input
+        if (!input) {
+            input = label.parentElement?.querySelector('input, select, textarea');
+        }
+
+        if (input && !input.disabled && !input.readOnly) {
+            fields.push({ label: labelText, input });
+        }
+    });
+
+    // Strategy 2: Find inputs with placeholder or aria-label
+    document.querySelectorAll('input, select, textarea').forEach(input => {
+        if (input.disabled || input.readOnly) return;
+
+        const labelText = input.placeholder || input.getAttribute('aria-label') || input.name;
+        if (labelText && !fields.find(f => f.input === input)) {
+            fields.push({ label: labelText, input });
+        }
+    });
+
+    // Strategy 3: Workday-specific selectors
+    if (isWorkdayPage()) {
+        document.querySelectorAll('[data-automation-id]').forEach(el => {
+            const automationId = el.getAttribute('data-automation-id');
+            const labelEl = el.querySelector('[data-automation-id$="Label"]');
+            const inputEl = el.querySelector('input, select, textarea');
+
+            if (labelEl && inputEl && !inputEl.disabled) {
+                fields.push({ label: labelEl.textContent?.trim() || automationId, input: inputEl });
+            }
+        });
+    }
+
+    return fields;
+}
+
+// Main auto-fill function
+async function runAutoFill() {
+    console.log('CareerFit: Running auto-fill...');
+
+    // Get saved answers
+    const { autofillAnswers = {} } = await safeStorageGet(['autofillAnswers']);
+
+    if (Object.keys(autofillAnswers).length === 0) {
+        alert('CareerFit: No auto-fill answers saved. Please configure them in the extension options.');
+        return { filled: 0, total: 0 };
+    }
+
+    const fields = findFormFields();
+    console.log('CareerFit: Found', fields.length, 'form fields');
+
+    let filledCount = 0;
+    const filledFields = [];
+
+    for (const { label, input } of fields) {
+        const fieldKey = matchQuestionToField(label);
+        if (!fieldKey) continue;
+
+        const value = getAutofillValue(fieldKey, autofillAnswers);
+        if (!value) continue;
+
+        let filled = false;
+
+        if (input.tagName === 'SELECT') {
+            filled = fillSelect(input, value);
+        } else if (input.type === 'radio') {
+            // Find all radios with same name
+            const radioGroup = document.querySelectorAll(`input[name="${input.name}"]`);
+            filled = fillRadio(radioGroup, value, fieldKey);
+        } else if (input.type === 'checkbox') {
+            // For checkboxes, check if value is "yes"
+            if (value === 'yes' && !input.checked) {
+                input.click();
+                filled = true;
+            }
+        } else {
+            filled = fillTextInput(input, value);
+        }
+
+        if (filled) {
+            filledCount++;
+            filledFields.push(label);
+            console.log('CareerFit: Filled', label, '→', fieldKey);
+        }
+    }
+
+    console.log('CareerFit: Auto-fill complete.', filledCount, 'fields filled');
+    return { filled: filledCount, total: fields.length, filledFields };
+}
+
+// --- 7. Handle Auto-fill button click ---
+document.getElementById('autofill-btn').addEventListener('click', async () => {
+    const autoFillBtn = document.getElementById('autofill-btn');
+    autoFillBtn.disabled = true;
+    autoFillBtn.textContent = 'Filling...';
+
+    const result = await runAutoFill();
+
+    autoFillBtn.disabled = false;
+    autoFillBtn.textContent = 'Auto-fill';
+
+    // Show result in modal
+    modal.style.display = 'block';
+    const modalContent = document.getElementById('assess-modal-content');
+
+    if (result.filled > 0) {
+        modalContent.innerHTML = `
+            <div style="font-size: 13px; font-weight: 600; color: #3d8b6e; margin-bottom: 8px;">Auto-Fill Complete!</div>
+            <p style="font-size: 12px; color: #333;">
+                Filled <strong>${result.filled}</strong> field${result.filled > 1 ? 's' : ''}.
+            </p>
+            ${result.filledFields?.length > 0 ? `
+                <div style="background: #fdfcf8; padding: 10px; border-radius: 6px; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #e0ddd0;">
+                    <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Fields filled:</div>
+                    ${result.filledFields.map(f => `<div style="font-size: 12px; color: #333; margin: 4px 0;">✓ ${f}</div>`).join('')}
+                </div>
+            ` : ''}
+            <p style="font-size: 11px; color: #888; margin-top: 12px;">
+                Please review the filled values before submitting.
+            </p>
+        `;
+    } else {
+        modalContent.innerHTML = `
+            <div style="font-size: 13px; font-weight: 600; color: #c9a050; margin-bottom: 8px;">No Fields Filled</div>
+            <p style="font-size: 12px; color: #666;">
+                Could not match any form fields to your saved answers.
+            </p>
+            <p style="font-size: 11px; color: #888; margin-top: 10px;">
+                Tips:<br>
+                • Make sure you've saved auto-fill answers in extension options<br>
+                • The form may use custom field names not yet supported
+            </p>
+        `;
+    }
+});
+
+console.log('CareerFit: Phase 8 - Application Auto-Fill loaded');
